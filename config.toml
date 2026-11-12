@@ -1,0 +1,2 @@
+[global]
+remap = { caps = "ctrl", '1' = '2', lalt = "rmet", '/' = '='}
