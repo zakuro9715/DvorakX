@@ -6,26 +6,10 @@ import (
 	"testing"
 )
 
-func TestParseRemap(t *testing.T) {
-	config, err := Parse([]byte("[global]\nremap = { caps = 'ctrl', a = 'b' }\n"))
-	if err != nil {
-		t.Fatalf("Parse() error = %v", err)
-	}
-	if len(config.Remap) != 2 {
-		t.Fatalf("len(Remap) = %d, want 2", len(config.Remap))
-	}
-	if config.Remap[vkCapital] != vkControl {
-		t.Errorf("caps remap = %#x, want %#x", config.Remap[vkCapital], vkControl)
-	}
-	if config.Remap[vkA] != vkA+1 {
-		t.Errorf("a remap = %#x, want %#x", config.Remap[vkA], vkA+1)
-	}
-}
-
-func TestParseRemapArrayMergesEntries(t *testing.T) {
+func TestParseRemapsArrayMergesEntries(t *testing.T) {
 	config, err := Parse([]byte(`
 [global]
-remap = [
+remaps = [
   { caps = "ctrl", a = "b" },
   { a = "c", b = "d" },
 ]
@@ -55,14 +39,14 @@ func TestParseRejectsUnsupportedConfiguration(t *testing.T) {
 }
 
 func TestParseRejectsUnknownKey(t *testing.T) {
-	_, err := Parse([]byte("[global]\nremap = { capslock = 'ctrl' }\n"))
+	_, err := Parse([]byte("[global]\nremaps = [{ capslock = 'ctrl' }]\n"))
 	if err == nil || !strings.Contains(err.Error(), `unsupported remap source key "capslock"`) {
 		t.Fatalf("Parse() error = %v, want unsupported key error", err)
 	}
 }
 
 func TestParseRejectsInvalidRemapValue(t *testing.T) {
-	_, err := Parse([]byte("[global]\nremap = { caps = 1 }\n"))
+	_, err := Parse([]byte("[global]\nremaps = [{ caps = 1 }]\n"))
 	if err == nil || !strings.Contains(err.Error(), "invalid remap destination") {
 		t.Fatalf("Parse() error = %v, want remap destination error", err)
 	}
@@ -74,7 +58,7 @@ func TestParseStaticDefaultLayer(t *testing.T) {
 default = "&swap"
 
 [global]
-remap = { a = "c" }
+remaps = [{ a = "c" }]
 
 [src]
 def = ["a", "b", "c"]
@@ -127,7 +111,7 @@ func TestParseBraceEscapedKeyDefinitions(t *testing.T) {
 default = "&symbols"
 
 [global]
-remap = { "{,}" = "{|}" }
+remaps = [{ "{,}" = "{|}" }]
 
 [src]
 def = ["a", "b", "c"]

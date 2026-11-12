@@ -9,14 +9,14 @@ import (
 )
 
 func TestSwapAAndB(t *testing.T) {
-	environment := testenv.Start(t, "[global]\nremap = { a = 'b', b = 'a' }\n")
+	environment := testenv.Start(t, "[global]\nremaps = [{ a = 'b', b = 'a' }]\n")
 
 	environment.AssertKey("a", "b")
 	environment.AssertKey("b", "a")
 }
 
 func TestSwapOneAndTwoWithShift(t *testing.T) {
-	environment := testenv.Start(t, "[global]\nremap = { '1' = '2', '2' = '1' }\n")
+	environment := testenv.Start(t, "[global]\nremaps = [{ '1' = '2', '2' = '1' }]\n")
 
 	environment.AssertShiftedKey("1", "@")
 	environment.AssertShiftedKey("2", "!")

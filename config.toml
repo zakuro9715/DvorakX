@@ -1,5 +1,5 @@
 [global]
-remap = [
+remaps = [
   { caps = "ctrl", '1' = '2' },
   { lalt = "rmet", '/' = '=' },
 ]

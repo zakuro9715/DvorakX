@@ -60,7 +60,7 @@ layer-switch = [
 # direct remap.
 # `caps` key will be remapped to `ctrl`
 # This mapping is proceed after `def` remapping.
-remap={ caps = 'ctrl' }
+remaps=[{ caps = 'ctrl' }]
 
 [src]
 # define source layer. This layer is used as source of remapping.

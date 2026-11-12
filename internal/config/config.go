@@ -58,7 +58,7 @@ func Parse(data []byte) (Config, error) {
 		return Config{}, err
 	}
 	if !hasLayers && len(global) == 0 {
-		return Config{}, fmt.Errorf("config must define at least one [global].remap entry")
+		return Config{}, fmt.Errorf("config must define at least one [global].remaps entry")
 	}
 	for source, destination := range global {
 		remap[source] = destination
@@ -79,33 +79,28 @@ func parseGlobal(raw map[string]any) (map[uint16]uint16, error) {
 		return nil, err
 	}
 	for name := range table {
-		if name != "remap" {
+		if name != "remaps" {
 			return nil, fmt.Errorf("unsupported [global] field %q", name)
 		}
 	}
 
-	remapValue, ok := table["remap"]
+	remapValue, ok := table["remaps"]
 	if !ok {
 		return map[uint16]uint16{}, nil
 	}
 	remap := make(map[uint16]uint16)
-	switch remapValue := remapValue.(type) {
-	case map[string]any:
-		if err := mergeRemap(remap, remapValue); err != nil {
+	remaps, ok := remapValue.([]any)
+	if !ok {
+		return nil, fmt.Errorf("[global].remaps must be a TOML table array")
+	}
+	for index, value := range remaps {
+		entries, err := asTable(value, fmt.Sprintf("[global].remaps[%d]", index))
+		if err != nil {
 			return nil, err
 		}
-	case []any:
-		for index, value := range remapValue {
-			entries, err := asTable(value, fmt.Sprintf("[global].remap[%d]", index))
-			if err != nil {
-				return nil, err
-			}
-			if err := mergeRemap(remap, entries); err != nil {
-				return nil, err
-			}
+		if err := mergeRemap(remap, entries); err != nil {
+			return nil, err
 		}
-	default:
-		return nil, fmt.Errorf("[global].remap must be a TOML table or table array")
 	}
 	return remap, nil
 }
