@@ -22,6 +22,31 @@ func TestParseRemap(t *testing.T) {
 	}
 }
 
+func TestParseRemapArrayMergesEntries(t *testing.T) {
+	config, err := Parse([]byte(`
+[global]
+remap = [
+  { caps = "ctrl", a = "b" },
+  { a = "c", b = "d" },
+]
+`))
+	if err != nil {
+		t.Fatalf("Parse() error = %v", err)
+	}
+	if len(config.Remap) != 3 {
+		t.Fatalf("len(Remap) = %d, want 3", len(config.Remap))
+	}
+	if got := config.Remap[vkCapital]; got != vkControl {
+		t.Errorf("caps remap = %#x, want %#x", got, vkControl)
+	}
+	if got := config.Remap[vkA]; got != vkA+2 {
+		t.Errorf("a remap = %#x, want %#x", got, vkA+2)
+	}
+	if got := config.Remap[vkA+1]; got != vkA+3 {
+		t.Errorf("b remap = %#x, want %#x", got, vkA+3)
+	}
+}
+
 func TestParseRejectsUnsupportedConfiguration(t *testing.T) {
 	_, err := Parse([]byte("[global]\norder = ['qwerty']\n"))
 	if err == nil || !strings.Contains(err.Error(), `unsupported [global] field "order"`) {

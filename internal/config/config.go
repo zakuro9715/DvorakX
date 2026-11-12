@@ -88,35 +88,53 @@ func parseGlobal(raw map[string]any) (map[uint16]uint16, error) {
 	if !ok {
 		return map[uint16]uint16{}, nil
 	}
-	entries, err := asTable(remapValue, "[global].remap")
-	if err != nil {
-		return nil, err
+	remap := make(map[uint16]uint16)
+	switch remapValue := remapValue.(type) {
+	case map[string]any:
+		if err := mergeRemap(remap, remapValue); err != nil {
+			return nil, err
+		}
+	case []any:
+		for index, value := range remapValue {
+			entries, err := asTable(value, fmt.Sprintf("[global].remap[%d]", index))
+			if err != nil {
+				return nil, err
+			}
+			if err := mergeRemap(remap, entries); err != nil {
+				return nil, err
+			}
+		}
+	default:
+		return nil, fmt.Errorf("[global].remap must be a TOML table or table array")
 	}
-	remap := make(map[uint16]uint16, len(entries))
+	return remap, nil
+}
+
+func mergeRemap(remap map[uint16]uint16, entries map[string]any) error {
 	for sourceName, value := range entries {
 		destinationName, ok := value.(string)
 		if !ok {
-			return nil, fmt.Errorf("invalid remap destination for %q: must be a string", sourceName)
+			return fmt.Errorf("invalid remap destination for %q: must be a string", sourceName)
 		}
-		sourceName, err = unescapeKeyName(sourceName)
+		sourceName, err := unescapeKeyName(sourceName)
 		if err != nil {
-			return nil, fmt.Errorf("invalid remap source key: %w", err)
+			return fmt.Errorf("invalid remap source key: %w", err)
 		}
 		destinationName, err = unescapeKeyName(destinationName)
 		if err != nil {
-			return nil, fmt.Errorf("invalid remap destination key: %w", err)
+			return fmt.Errorf("invalid remap destination key: %w", err)
 		}
 		source, ok := virtualKey(sourceName)
 		if !ok {
-			return nil, fmt.Errorf("unsupported remap source key %q", sourceName)
+			return fmt.Errorf("unsupported remap source key %q", sourceName)
 		}
 		destination, ok := virtualKey(destinationName)
 		if !ok {
-			return nil, fmt.Errorf("unsupported remap destination key %q", destinationName)
+			return fmt.Errorf("unsupported remap destination key %q", destinationName)
 		}
 		remap[source] = destination
 	}
-	return remap, nil
+	return nil
 }
 
 func resolveLayers(raw map[string]any, remap map[uint16]uint16) (bool, error) {
