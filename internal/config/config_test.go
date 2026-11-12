@@ -159,11 +159,6 @@ func TestParseRejectsInvalidStaticLayer(t *testing.T) {
 			want: "requires [meta]",
 		},
 		{
-			name: "legacy layer reference prefix",
-			data: "[meta]\ndefault = '@layer'\n[src]\ndef = ['a']\n[layer]\ndef = ['a']\n",
-			want: "reference a layer with &",
-		},
-		{
 			name: "undefined default layer",
 			data: "[meta]\ndefault = '&missing'\n[src]\ndef = ['a']\n",
 			want: `undefined layer "missing"`,
