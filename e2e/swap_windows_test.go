@@ -21,3 +21,19 @@ func TestSwapOneAndTwoWithShift(t *testing.T) {
 	environment.AssertShiftedKey("1", "@")
 	environment.AssertShiftedKey("2", "!")
 }
+
+func TestStaticDefaultLayer(t *testing.T) {
+	environment := testenv.Start(t, `
+[meta]
+default = "@swap"
+
+[src]
+def = ["a", "b"]
+
+[swap]
+def = "b | a"
+`)
+
+	environment.AssertKey("a", "b")
+	environment.AssertKey("b", "a")
+}
