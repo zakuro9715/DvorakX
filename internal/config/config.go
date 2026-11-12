@@ -174,9 +174,9 @@ func resolveLayers(raw map[string]any, remap map[uint16]uint16) (bool, error) {
 	if !ok {
 		return false, fmt.Errorf("[meta].default must be a string layer reference")
 	}
-	defaultLayer, ok := strings.CutPrefix(defaultValue, "@")
+	defaultLayer, ok := strings.CutPrefix(defaultValue, "&")
 	if !ok || defaultLayer == "" {
-		return false, fmt.Errorf("[meta].default must reference a layer with @")
+		return false, fmt.Errorf("[meta].default must reference a layer with &")
 	}
 
 	source, err := parseDefinition(sourceValue, "[src]")

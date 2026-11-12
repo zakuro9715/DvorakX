@@ -71,7 +71,7 @@ func TestParseRejectsInvalidRemapValue(t *testing.T) {
 func TestParseStaticDefaultLayer(t *testing.T) {
 	config, err := Parse([]byte(`
 [meta]
-default = "@swap"
+default = "&swap"
 
 [global]
 remap = { a = "c" }
@@ -102,7 +102,7 @@ b | _ , a
 func TestParseStaticDefaultLayerCanReuseSource(t *testing.T) {
 	config, err := Parse([]byte(`
 [meta]
-default = "@qwerty"
+default = "&qwerty"
 
 [src]
 def = ["a", "b"]
@@ -124,7 +124,7 @@ def = "#src"
 func TestParseBraceEscapedKeyDefinitions(t *testing.T) {
 	config, err := Parse([]byte(`
 [meta]
-default = "@symbols"
+default = "&symbols"
 
 [global]
 remap = { "{,}" = "{|}" }
@@ -155,7 +155,7 @@ def = "{,}|{|}|{'}"
 func TestParseRejectsMalformedBraceEscapes(t *testing.T) {
 	for _, definition := range []string{"{,", "}", "{}", "{a{}}"} {
 		t.Run(definition, func(t *testing.T) {
-			_, err := Parse([]byte("[meta]\ndefault = '@layer'\n[src]\ndef = ['a']\n[layer]\ndef = '" + definition + "'\n"))
+			_, err := Parse([]byte("[meta]\ndefault = '&layer'\n[src]\ndef = ['a']\n[layer]\ndef = '" + definition + "'\n"))
 			if err == nil {
 				t.Fatalf("Parse() error = %v, want brace error", err)
 			}
@@ -175,18 +175,23 @@ func TestParseRejectsInvalidStaticLayer(t *testing.T) {
 			want: "requires [meta]",
 		},
 		{
+			name: "legacy layer reference prefix",
+			data: "[meta]\ndefault = '@layer'\n[src]\ndef = ['a']\n[layer]\ndef = ['a']\n",
+			want: "reference a layer with &",
+		},
+		{
 			name: "undefined default layer",
-			data: "[meta]\ndefault = '@missing'\n[src]\ndef = ['a']\n",
+			data: "[meta]\ndefault = '&missing'\n[src]\ndef = ['a']\n",
 			want: `undefined layer "missing"`,
 		},
 		{
 			name: "mismatched definitions",
-			data: "[meta]\ndefault = '@layer'\n[src]\ndef = ['a']\n[layer]\ndef = ['a', 'b']\n",
+			data: "[meta]\ndefault = '&layer'\n[src]\ndef = ['a']\n[layer]\ndef = ['a', 'b']\n",
 			want: "different lengths",
 		},
 		{
 			name: "invalid destination key",
-			data: "[meta]\ndefault = '@layer'\n[src]\ndef = ['a']\n[layer]\ndef = ['invalid']\n",
+			data: "[meta]\ndefault = '&layer'\n[src]\ndef = ['a']\n[layer]\ndef = ['invalid']\n",
 			want: `unsupported default layer key "invalid"`,
 		},
 	}

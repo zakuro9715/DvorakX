@@ -14,7 +14,7 @@ DvorakX is configured by toml file.
 - configure DvorakX on the `[meta]` table
 - There are some special string.
 - String literals with prefixes have special meanings.
-    - `@layer-name` is reference to other layer.
+    - `&layer-name` is reference to other layer.
     - `#keyword` is pre-defined [keyword](#Keyword).
 
 ## Example
@@ -30,7 +30,7 @@ DvorakX is configured by toml file.
 
 # define default layer. it's startup layer.
 # it can be referred as `#default`.
-default="@qwerty"
+default="&qwerty"
 
 # define layer order. This is used for `#next` and `#prev` keyword.
 order=['qwerty', 'dvorak']
@@ -43,8 +43,8 @@ hotkeys = [
 
 [global]
 # define alias name.
-# In this example, `@qw` is alias of `@qwerty`, and `@dv` is alias of `@dvorak`.
-alias = { qw = '@qwerty', dv = '@dvorak', }
+# In this example, `&qw` is alias of `&qwerty`, and `&dv` is alias of `&dvorak`.
+alias = { qw = '&qwerty', dv = '&dvorak', }
 
 # Layer switch / toggle
 # a|b is a or b.
@@ -53,7 +53,7 @@ alias = { qw = '@qwerty', dv = '@dvorak', }
 layer-toggle = { 'ctrl|alt|shift|met' = '#default', }
 # switch layer.
 layer-switch = [
-  { ctrl-alt-0='#default', ctrl-alt-1 = '@qw', ctrl-alt-2 = '@dv'},
+  { ctrl-alt-0='#default', ctrl-alt-1 = '&qw', ctrl-alt-2 = '&dv'},
   { ctrl-alt-right = '#next', ctrl-alt-left = '#prev'},
 ]
 

@@ -25,7 +25,7 @@ func TestSwapOneAndTwoWithShift(t *testing.T) {
 func TestStaticDefaultLayer(t *testing.T) {
 	environment := testenv.Start(t, `
 [meta]
-default = "@swap"
+default = "&swap"
 
 [src]
 def = ["a", "b"]
