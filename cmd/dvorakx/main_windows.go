@@ -12,6 +12,7 @@ import (
 
 	"github.com/zakuro9715/DvorakX/internal/config"
 	"github.com/zakuro9715/DvorakX/internal/keyboard"
+	"github.com/zakuro9715/DvorakX/internal/windows"
 )
 
 func main() {
@@ -53,7 +54,7 @@ func main() {
 	if debug {
 		debugOutput = os.Stderr
 	}
-	if err := keyboard.Run(mappings, stop, debugOutput); err != nil {
+	if err := windows.Run(mappings, stop, debugOutput); err != nil {
 		exitf("%v", err)
 	}
 }

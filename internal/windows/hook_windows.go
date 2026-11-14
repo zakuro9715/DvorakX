@@ -1,6 +1,6 @@
 //go:build windows
 
-package keyboard
+package windows
 
 import (
 	"fmt"
@@ -8,6 +8,8 @@ import (
 	"runtime"
 	"syscall"
 	"unsafe"
+
+	"github.com/zakuro9715/DvorakX/internal/keyboard"
 )
 
 const (
@@ -64,7 +66,7 @@ type point struct {
 }
 
 // Run intercepts and remaps key events until stop is closed.
-func Run(mappings *Mappings, stop <-chan struct{}, debugOutput io.Writer) error {
+func Run(mappings *keyboard.Mappings, stop <-chan struct{}, debugOutput io.Writer) error {
 	runtime.LockOSThread()
 	defer runtime.UnlockOSThread()
 
