@@ -65,6 +65,31 @@ type point struct {
 	Y int32
 }
 
+type output struct{}
+
+func (o output) Send(event keyboard.Event) error {
+	flags := uint32(0)
+	if isExtendedVirtualKey(event.VirtualKey) {
+		flags |= keyeventfExtendedKey
+	}
+	if event.KeyUp {
+		flags |= keyeventfKeyUp
+	}
+	eventInput := input{
+		Type: inputKeyboard,
+		Ki: keyboardInput{
+			VirtualKey: event.VirtualKey,
+			Flags:      flags,
+			ExtraInfo:  injectionMarker,
+		},
+	}
+	sent, _, err := procSendInput.Call(1, uintptr(unsafe.Pointer(&eventInput)), unsafe.Sizeof(eventInput))
+	if sent == 0 {
+		return err
+	}
+	return nil
+}
+
 // Run intercepts and remaps key events until stop is closed.
 func Run(mappings *keyboard.Mappings, stop <-chan struct{}, debugOutput io.Writer) error {
 	runtime.LockOSThread()
@@ -72,7 +97,7 @@ func Run(mappings *keyboard.Mappings, stop <-chan struct{}, debugOutput io.Write
 
 	threadID, _, _ := procGetCurrentThreadID.Call()
 	debugf(debugOutput, "keyboard hook starting on thread %d", threadID)
-	pressed := make(map[uint16]uint16)
+	simulated := keyboard.NewSimulatedKeyboard(mappings, output{})
 	callback := func(code int, wParam uintptr, event *keyboardHook) uintptr {
 		if code < 0 {
 			return callNext(code, wParam, event)
@@ -82,52 +107,22 @@ func Run(mappings *keyboard.Mappings, stop <-chan struct{}, debugOutput io.Write
 			return callNext(code, wParam, event)
 		}
 
-		source := uint16(event.VirtualKey)
 		keyUp := event.Flags&0x80 != 0
-		var destination uint16
-		var ok bool
-		if keyUp {
-			destination, ok = pressed[source]
-			if !ok {
-				return callNext(code, wParam, event)
-			}
-			delete(pressed, source)
-		} else {
-			destination, ok = pressed[source]
-			if !ok {
-				destination, ok = mappings.Load()[source]
-				if !ok {
-					return callNext(code, wParam, event)
-				}
-				pressed[source] = destination
-			}
-		}
-
-		flags := uint32(0)
-		if isExtendedVirtualKey(destination) {
-			flags |= keyeventfExtendedKey
-		}
-		if keyUp {
-			flags |= keyeventfKeyUp
-		}
 		eventType := "down"
-		if flags&keyeventfKeyUp != 0 {
+		if keyUp {
 			eventType = "up"
 		}
-		debugf(debugOutput, "remap vk=0x%02X -> vk=0x%02X (%s)", event.VirtualKey, destination, eventType)
-		eventInput := input{
-			Type: inputKeyboard,
-			Ki: keyboardInput{
-				VirtualKey: destination,
-				Flags:      flags,
-				ExtraInfo:  injectionMarker,
-			},
+		handled, err := simulated.Handle(keyboard.Event{
+			VirtualKey: uint16(event.VirtualKey),
+			KeyUp:      keyUp,
+		})
+		if err != nil {
+			debugf(debugOutput, "SendInput failed for vk=0x%02X: %v", event.VirtualKey, err)
 		}
-		sent, _, sendErr := procSendInput.Call(1, uintptr(unsafe.Pointer(&eventInput)), unsafe.Sizeof(eventInput))
-		if sent == 0 {
-			debugf(debugOutput, "SendInput failed for vk=0x%02X: %v", destination, sendErr)
+		if !handled {
 			return callNext(code, wParam, event)
 		}
+		debugf(debugOutput, "remap vk=0x%02X (%s)", event.VirtualKey, eventType)
 		return 1
 	}
 
