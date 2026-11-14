@@ -3,12 +3,14 @@
 package main
 
 import (
-	"flag"
+	"context"
 	"fmt"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
+
+	"github.com/urfave/cli/v3"
 
 	"github.com/zakuro9715/DvorakX/internal/config"
 	"github.com/zakuro9715/DvorakX/internal/keyboard"
@@ -16,23 +18,40 @@ import (
 )
 
 func main() {
-	var configPath string
-	var debug bool
-	flag.StringVar(&configPath, "config", "", "path to TOML configuration file")
-	flag.BoolVar(&debug, "debug", false, "write remapping diagnostics to standard error")
-	flag.Parse()
+	command := &cli.Command{
+		Name:  "dvorakx",
+		Usage: "remap keyboard keys",
+		Flags: []cli.Flag{
+			&cli.StringFlag{
+				Name:  "config",
+				Usage: "path to TOML configuration file",
+			},
+			&cli.BoolFlag{
+				Name:  "debug",
+				Usage: "write remapping diagnostics to standard error",
+			},
+		},
+		Action: func(_ context.Context, command *cli.Command) error {
+			return run(command.String("config"), command.Bool("debug"))
+		},
+	}
+	if err := command.Run(context.Background(), os.Args); err != nil {
+		exitf("%v", err)
+	}
+}
 
+func run(configPath string, debug bool) error {
 	executablePath, err := os.Executable()
 	if err != nil {
-		exitf("resolve executable path: %v", err)
+		return fmt.Errorf("resolve executable path: %w", err)
 	}
 	configPath, err = config.ResolveConfigPath(configPath, executablePath)
 	if err != nil {
-		exitf("%v", err)
+		return err
 	}
 	loaded, err := config.LoadFile(configPath)
 	if err != nil {
-		exitf("%v", err)
+		return err
 	}
 	if debug {
 		fmt.Fprintf(os.Stderr, "dvorakv: debug: loaded %d mapping(s) from %s\n", len(loaded.Remap), configPath)
@@ -55,8 +74,9 @@ func main() {
 		debugOutput = os.Stderr
 	}
 	if err := windows.Run(mappings, stop, debugOutput); err != nil {
-		exitf("%v", err)
+		return err
 	}
+	return nil
 }
 
 type configFileState struct {
