@@ -272,19 +272,21 @@ func parseGlobal(raw map[string]any, positions sourcePositions, diagnostics *Dia
 	if !ok {
 		return remap
 	}
-	remaps, ok := remapValue.([]any)
-	if !ok {
-		addDiagnostic(diagnostics, positions, "global.remaps", "[global].remaps must be a TOML table array")
-		return remap
-	}
-	for index, value := range remaps {
-		path := fmt.Sprintf("global.remaps[%d]", index)
-		entries, ok := value.(map[string]any)
-		if !ok {
-			addDiagnostic(diagnostics, positions, path, "[global].remaps[%d] must be a TOML table", index)
-			continue
+	switch remaps := remapValue.(type) {
+	case map[string]any:
+		mergeRemap(remap, remaps, positions, diagnostics, "global.remaps")
+	case []any:
+		for index, value := range remaps {
+			path := fmt.Sprintf("global.remaps[%d]", index)
+			entries, ok := value.(map[string]any)
+			if !ok {
+				addDiagnostic(diagnostics, positions, path, "[global].remaps[%d] must be a TOML table", index)
+				continue
+			}
+			mergeRemap(remap, entries, positions, diagnostics, path)
 		}
-		mergeRemap(remap, entries, positions, diagnostics, path)
+	default:
+		addDiagnostic(diagnostics, positions, "global.remaps", "[global].remaps must be a TOML table or table array")
 	}
 	return remap
 }

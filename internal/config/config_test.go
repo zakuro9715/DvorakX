@@ -31,6 +31,36 @@ remaps = [
 	}
 }
 
+func TestParseRemapsTable(t *testing.T) {
+	config, err := Parse([]byte(`
+[global.remaps]
+caps = "ctrl"
+a = "b"
+`))
+	if err != nil {
+		t.Fatalf("Parse() error = %v", err)
+	}
+	if len(config.Remap) != 2 {
+		t.Fatalf("len(Remap) = %d, want 2", len(config.Remap))
+	}
+	if got := config.Remap[vkCapital]; got != vkControl {
+		t.Errorf("caps remap = %#x, want %#x", got, vkControl)
+	}
+	if got := config.Remap[vkA]; got != vkA+1 {
+		t.Errorf("a remap = %#x, want %#x", got, vkA+1)
+	}
+}
+
+func TestParseRejectsScalarRemaps(t *testing.T) {
+	_, err := Parse([]byte(`
+[global]
+remaps = "invalid"
+`))
+	if err == nil || !hasErrorMessage(err, "[global].remaps must be a TOML table or table array") {
+		t.Fatalf("Parse() error = %v, want invalid remaps type error", err)
+	}
+}
+
 func TestParseRejectsUnsupportedConfiguration(t *testing.T) {
 	_, err := Parse([]byte("[global]\norder = ['qwerty']\n"))
 	diagnostics, ok := err.(*Diagnostics)
