@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"strings"
 	"time"
 
 	urfavecli "github.com/urfave/cli/v3"
@@ -39,6 +40,10 @@ func Run(ctx context.Context, args []string, runner Runner) error {
 }
 
 func run(ctx context.Context, configPath string, debug bool, runner Runner) error {
+	displayPath := ""
+	if configPath == "" {
+		displayPath = "config.toml"
+	}
 	executablePath, err := os.Executable()
 	if err != nil {
 		return fmt.Errorf("resolve executable path: %w", err)
@@ -47,7 +52,7 @@ func run(ctx context.Context, configPath string, debug bool, runner Runner) erro
 	if err != nil {
 		return err
 	}
-	loaded, err := config.LoadFile(configPath)
+	loaded, err := loadConfig(configPath, displayPath)
 	if err != nil {
 		return err
 	}
@@ -70,7 +75,7 @@ func run(ctx context.Context, configPath string, debug bool, runner Runner) erro
 	}()
 
 	mappings := keyboard.NewMappings(loaded.Remap)
-	go watchConfig(configPath, mappings, stop, debug)
+	go watchConfig(configPath, displayPath, mappings, stop, debug)
 
 	fmt.Printf("DvorakX remapping %d key(s); press Ctrl+C to stop.\n", len(loaded.Remap))
 	return runner(mappings, stop, debug)
@@ -81,7 +86,7 @@ type configFileState struct {
 	modTime time.Time
 }
 
-func watchConfig(path string, mappings *keyboard.Mappings, stop <-chan struct{}, debug bool) {
+func watchConfig(path, displayPath string, mappings *keyboard.Mappings, stop <-chan struct{}, debug bool) {
 	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
 
@@ -113,9 +118,9 @@ func watchConfig(path string, mappings *keyboard.Mappings, stop <-chan struct{},
 			}
 			previous = current
 
-			loaded, err := config.LoadFile(path)
+			loaded, err := loadConfig(path, displayPath)
 			if err != nil {
-				fmt.Fprintf(os.Stderr, "dvorakv: reload config %q: %v\n", path, err)
+				fmt.Fprintln(os.Stderr, formatConfigError("reload", path, err, colorOutput(os.Stderr)))
 				continue
 			}
 			mappings.Replace(loaded.Remap)
@@ -123,5 +128,41 @@ func watchConfig(path string, mappings *keyboard.Mappings, stop <-chan struct{},
 				fmt.Fprintf(os.Stderr, "dvorakv: debug: reloaded %d mapping(s) from %s\n", len(loaded.Remap), path)
 			}
 		}
+
 	}
+}
+
+func loadConfig(path, displayPath string) (config.Config, error) {
+	loaded, err := config.LoadFile(path)
+	if diagnostics, ok := err.(*config.Diagnostics); ok && displayPath != "" {
+		for index := range diagnostics.Items {
+			diagnostics.Items[index].Path = displayPath
+		}
+	}
+	return loaded, err
+}
+
+func formatConfigError(operation, path string, err error, colors ...bool) string {
+	color := len(colors) > 0 && colors[0]
+	formatter := config.PrettyFormatter{Color: color}
+	var output strings.Builder
+	if diagnostics, ok := err.(*config.Diagnostics); ok {
+		fmt.Fprintf(&output, "dvorakv: %s config %q:\n", operation, path)
+		_ = formatter.FormatTo(&output, diagnostics.Items)
+		return output.String()
+	}
+	prefix := fmt.Sprintf("dvorakv: %s config %q", operation, path)
+	lines := strings.Split(err.Error(), "\n")
+	for index, line := range lines {
+		lines[index] = prefix + ": " + line
+	}
+	return strings.Join(lines, "\n")
+}
+
+func colorOutput(file *os.File) bool {
+	if os.Getenv("NO_COLOR") != "" {
+		return false
+	}
+	info, err := file.Stat()
+	return err == nil && info.Mode()&os.ModeCharDevice != 0
 }

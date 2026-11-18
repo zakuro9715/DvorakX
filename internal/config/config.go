@@ -1,13 +1,16 @@
 package config
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"unicode"
 
 	"github.com/pelletier/go-toml/v2"
+	"github.com/pelletier/go-toml/v2/unstable"
 )
 
 // Config contains the active static key remapping.
@@ -20,6 +23,16 @@ type definitionToken struct {
 	escaped bool
 }
 
+type sourcePosition struct {
+	line        int
+	column      int
+	length      int
+	sourceLine  string
+	sourceLines []string
+}
+
+type sourcePositions map[string]sourcePosition
+
 // ResolveConfigPath returns the explicit path, or config.toml next to the executable.
 func ResolveConfigPath(explicitPath, executablePath string) (string, error) {
 	if explicitPath != "" {
@@ -31,108 +44,284 @@ func ResolveConfigPath(explicitPath, executablePath string) (string, error) {
 	return filepath.Join(filepath.Dir(executablePath), "config.toml"), nil
 }
 
+func collectSourcePositions(data []byte) (sourcePositions, error) {
+	positions := make(sourcePositions)
+	sourceLines := splitSourceLines(data)
+	parser := &unstable.Parser{}
+	parser.Reset(data)
+	tablePath := ""
+	for parser.NextExpression() {
+		expression := parser.Expression()
+		switch expression.Kind {
+		case unstable.Table, unstable.ArrayTable:
+			tablePath = nodeKey(expression)
+			if tablePath != "" {
+				positions[tablePath] = nodePosition(parser, expression.Child(), sourceLines)
+			}
+		case unstable.KeyValue:
+			recordNodePositions(parser, expression, tablePath, positions, sourceLines)
+		}
+	}
+	if err := parser.Error(); err != nil {
+		return nil, err
+	}
+	return positions, nil
+}
+
+func recordNodePositions(parser *unstable.Parser, expression *unstable.Node, tablePath string, positions sourcePositions, sourceLines []string) {
+	key := expression.Key()
+	if !key.Next() {
+		return
+	}
+	keyNode := key.Node()
+	valueNode := expression.Value()
+	path := joinPath(tablePath, string(keyNode.Data))
+	positions[path] = nodePosition(parser, keyNode, sourceLines)
+	recordValuePositions(parser, valueNode, path, positions, sourceLines)
+}
+
+func recordValuePositions(parser *unstable.Parser, node *unstable.Node, path string, positions sourcePositions, sourceLines []string) {
+	if node == nil {
+		return
+	}
+	switch node.Kind {
+	case unstable.Array:
+		index := 0
+		for child := node.Child(); child != nil; child = child.Next() {
+			childPath := fmt.Sprintf("%s[%d]", path, index)
+			positions[childPath] = nodePosition(parser, child, sourceLines)
+			recordValuePositions(parser, child, childPath, positions, sourceLines)
+			index++
+		}
+	case unstable.InlineTable:
+		for child := node.Child(); child != nil; child = child.Next() {
+			if child.Kind != unstable.KeyValue {
+				continue
+			}
+			key := child.Key()
+			if !key.Next() {
+				continue
+			}
+			keyNode := key.Node()
+			childPath := joinPath(path, string(keyNode.Data))
+			positions[childPath] = nodePosition(parser, keyNode, sourceLines)
+			recordValuePositions(parser, child.Value(), childPath, positions, sourceLines)
+		}
+	}
+}
+
+func nodeKey(node *unstable.Node) string {
+	var parts []string
+	for key := node.Key(); key.Next(); {
+		parts = append(parts, string(key.Node().Data))
+	}
+	return strings.Join(parts, ".")
+}
+
+func nodePosition(parser *unstable.Parser, node *unstable.Node, sourceLines []string) sourcePosition {
+	shape := parser.Shape(node.Raw)
+	data := parser.Data()
+	lineStart := shape.Start.Offset
+	for lineStart > 0 && data[lineStart-1] != '\n' {
+		lineStart--
+	}
+	lineEnd := shape.Start.Offset
+	for lineEnd < len(data) && data[lineEnd] != '\n' {
+		lineEnd++
+	}
+	return sourcePosition{
+		line:        shape.Start.Line,
+		column:      shape.Start.Column,
+		length:      int(node.Raw.Length),
+		sourceLine:  strings.TrimSuffix(string(data[lineStart:lineEnd]), "\r"),
+		sourceLines: sourceLines,
+	}
+}
+
+func joinPath(parent, child string) string {
+	if parent == "" {
+		return child
+	}
+	return parent + "." + child
+}
+
+func formatParseError(data []byte, err error) error {
+	var decodeError *toml.DecodeError
+	if errors.As(err, &decodeError) {
+		line, column := decodeError.Position()
+		sourceLine := sourceLine(data, line)
+		diagnostics := NewDiagnostics()
+		diagnostics.Add(Error{
+			Line:        line,
+			Column:      column,
+			Length:      1,
+			SourceLine:  sourceLine,
+			SourceLines: splitSourceLines(data),
+			Message:     strings.TrimPrefix(decodeError.Error(), "toml: "),
+		})
+		return diagnostics
+	}
+	return fmt.Errorf("parse config: %w", err)
+}
+
+func sourceLine(data []byte, line int) string {
+	if line < 1 {
+		return ""
+	}
+	start := 0
+	for currentLine := 1; currentLine < line; currentLine++ {
+		next := strings.IndexByte(string(data[start:]), '\n')
+		if next < 0 {
+			return ""
+		}
+		start += next + 1
+	}
+	end := start
+	for end < len(data) && data[end] != '\n' {
+		end++
+	}
+	return strings.TrimSuffix(string(data[start:end]), "\r")
+}
+
+func splitSourceLines(data []byte) []string {
+	return strings.Split(strings.TrimSuffix(string(data), "\n"), "\n")
+}
+
 // LoadFile reads, parses, and validates a configuration file.
 func LoadFile(path string) (Config, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return Config{}, fmt.Errorf("read config %q: %w", path, err)
 	}
-	return Parse(data)
+	loaded, err := Parse(data)
+	if diagnostics, ok := err.(*Diagnostics); ok {
+		for index := range diagnostics.Items {
+			diagnostics.Items[index].Path = path
+		}
+	}
+	return loaded, err
 }
 
 // Parse parses and validates direct remaps and static layer mappings.
 func Parse(data []byte) (Config, error) {
 	var raw map[string]any
 	if err := toml.Unmarshal(data, &raw); err != nil {
+		return Config{}, formatParseError(data, err)
+	}
+	positions, err := collectSourcePositions(data)
+	if err != nil {
 		return Config{}, fmt.Errorf("parse config: %w", err)
 	}
 
-	global, err := parseGlobal(raw)
-	if err != nil {
-		return Config{}, err
-	}
+	diagnostics := NewDiagnostics()
+	global := parseGlobal(raw, positions, diagnostics)
 
 	remap := make(map[uint16]uint16)
-	hasLayers, err := resolveLayers(raw, remap)
-	if err != nil {
-		return Config{}, err
+	hasLayers := resolveLayers(raw, remap, positions, diagnostics)
+	if len(diagnostics.Items) != 0 {
+		return Config{}, diagnostics
 	}
 	if !hasLayers && len(global) == 0 {
-		return Config{}, fmt.Errorf("config must define at least one [global].remaps entry")
+		addDiagnostic(diagnostics, positions, "global", "config must define at least one [global].remaps entry")
 	}
 	for source, destination := range global {
 		remap[source] = destination
 	}
 	if len(remap) == 0 {
-		return Config{}, fmt.Errorf("config must define at least one mapping")
+		addDiagnostic(diagnostics, positions, "global.remaps", "config must define at least one mapping")
+	}
+	if len(diagnostics.Items) != 0 {
+		return Config{}, diagnostics
 	}
 	return Config{Remap: remap}, nil
 }
 
-func parseGlobal(raw map[string]any) (map[uint16]uint16, error) {
+func addDiagnostic(e *Diagnostics, positions sourcePositions, path, format string, args ...any) {
+	position := positions[path]
+	if position.line == 0 {
+		position = sourcePosition{line: 1, column: 1}
+	}
+	e.Add(Error{
+		Line:        position.line,
+		Column:      position.column,
+		Length:      position.length,
+		SourceLine:  position.sourceLine,
+		SourceLines: position.sourceLines,
+		Message:     fmt.Sprintf(format, args...),
+	})
+}
+
+func parseGlobal(raw map[string]any, positions sourcePositions, diagnostics *Diagnostics) map[uint16]uint16 {
 	value, ok := raw["global"]
 	if !ok {
-		return map[uint16]uint16{}, nil
+		return map[uint16]uint16{}
 	}
-	table, err := asTable(value, "[global]")
-	if err != nil {
-		return nil, err
+	table, ok := value.(map[string]any)
+	if !ok {
+		addDiagnostic(diagnostics, positions, "global", "[global] must be a TOML table")
+		return map[uint16]uint16{}
 	}
-	for name := range table {
+	remap := make(map[uint16]uint16)
+	for _, name := range sortedKeys(table) {
 		if name != "remaps" {
-			return nil, fmt.Errorf("unsupported [global] field %q", name)
+			addDiagnostic(diagnostics, positions, "global."+name, "unsupported [global] field %q", name)
 		}
 	}
 
 	remapValue, ok := table["remaps"]
 	if !ok {
-		return map[uint16]uint16{}, nil
+		return remap
 	}
-	remap := make(map[uint16]uint16)
 	remaps, ok := remapValue.([]any)
 	if !ok {
-		return nil, fmt.Errorf("[global].remaps must be a TOML table array")
+		addDiagnostic(diagnostics, positions, "global.remaps", "[global].remaps must be a TOML table array")
+		return remap
 	}
 	for index, value := range remaps {
-		entries, err := asTable(value, fmt.Sprintf("[global].remaps[%d]", index))
-		if err != nil {
-			return nil, err
+		path := fmt.Sprintf("global.remaps[%d]", index)
+		entries, ok := value.(map[string]any)
+		if !ok {
+			addDiagnostic(diagnostics, positions, path, "[global].remaps[%d] must be a TOML table", index)
+			continue
 		}
-		if err := mergeRemap(remap, entries); err != nil {
-			return nil, err
-		}
+		mergeRemap(remap, entries, positions, diagnostics, path)
 	}
-	return remap, nil
+	return remap
 }
 
-func mergeRemap(remap map[uint16]uint16, entries map[string]any) error {
-	for sourceName, value := range entries {
+func mergeRemap(remap map[uint16]uint16, entries map[string]any, positions sourcePositions, diagnostics *Diagnostics, path string) {
+	for _, sourceName := range sortedKeysByPosition(entries, positions, path) {
+		value := entries[sourceName]
 		destinationName, ok := value.(string)
 		if !ok {
-			return fmt.Errorf("invalid remap destination for %q: must be a string", sourceName)
+			addDiagnostic(diagnostics, positions, path+"."+sourceName, "invalid remap destination for %q: must be a string", sourceName)
+			continue
 		}
-		sourceName, err := unescapeKeyName(sourceName)
+		unescapedSourceName, err := unescapeKeyName(sourceName)
 		if err != nil {
-			return fmt.Errorf("invalid remap source key: %w", err)
+			addDiagnostic(diagnostics, positions, path+"."+sourceName, "invalid remap source key: %v", err)
+			continue
 		}
 		destinationName, err = unescapeKeyName(destinationName)
 		if err != nil {
-			return fmt.Errorf("invalid remap destination key: %w", err)
+			addDiagnostic(diagnostics, positions, path+"."+sourceName, "invalid remap destination key: %v", err)
+			continue
 		}
-		source, ok := virtualKey(sourceName)
+		source, ok := virtualKey(unescapedSourceName)
 		if !ok {
-			return fmt.Errorf("unsupported remap source key %q", sourceName)
+			addDiagnostic(diagnostics, positions, path+"."+sourceName, "unsupported remap source key %q", unescapedSourceName)
+			continue
 		}
 		destination, ok := virtualKey(destinationName)
 		if !ok {
-			return fmt.Errorf("unsupported remap destination key %q", destinationName)
+			addDiagnostic(diagnostics, positions, path+"."+sourceName, "unsupported remap destination key %q", destinationName)
+			continue
 		}
 		remap[source] = destination
 	}
-	return nil
 }
 
-func resolveLayers(raw map[string]any, remap map[uint16]uint16) (bool, error) {
+func resolveLayers(raw map[string]any, remap map[uint16]uint16, positions sourcePositions, diagnostics *Diagnostics) bool {
 	_, hasMeta := raw["meta"]
 	sourceValue, hasSource := raw["src"]
 	var layerNames []string
@@ -143,119 +332,181 @@ func resolveLayers(raw map[string]any, remap map[uint16]uint16) (bool, error) {
 			layerNames = append(layerNames, name)
 		}
 	}
+	sort.SliceStable(layerNames, func(left, right int) bool {
+		leftPosition := positions[layerNames[left]]
+		rightPosition := positions[layerNames[right]]
+		if leftPosition.line != rightPosition.line {
+			return leftPosition.line < rightPosition.line
+		}
+		if leftPosition.column != rightPosition.column {
+			return leftPosition.column < rightPosition.column
+		}
+		return layerNames[left] < layerNames[right]
+	})
 	if !hasMeta && !hasSource {
 		if len(layerNames) != 0 {
-			return false, fmt.Errorf("layer table %q requires [meta] and [src]", layerNames[0])
+			for _, layerName := range layerNames {
+				addDiagnostic(diagnostics, positions, layerName, "layer table %q requires [meta] and [src]", layerName)
+				parseDefinition(raw[layerName], "["+layerName+"]", positions, diagnostics)
+			}
 		}
-		return false, nil
+		return false
 	}
 	if !hasMeta {
-		return false, fmt.Errorf("layer configuration requires [meta]")
+		addDiagnostic(diagnostics, positions, "meta", "layer configuration requires [meta]")
 	}
 	if !hasSource {
-		return false, fmt.Errorf("layer configuration requires [src]")
+		addDiagnostic(diagnostics, positions, "src", "layer configuration requires [src]")
+	}
+	if !hasMeta || !hasSource {
+		for _, layerName := range layerNames {
+			parseDefinition(raw[layerName], "["+layerName+"]", positions, diagnostics)
+		}
+		return false
 	}
 
-	meta, err := asTable(raw["meta"], "[meta]")
-	if err != nil {
-		return false, err
+	meta, ok := raw["meta"].(map[string]any)
+	if !ok {
+		addDiagnostic(diagnostics, positions, "meta", "[meta] must be a TOML table")
+		return false
 	}
-	for name := range meta {
+	for _, name := range sortedKeys(meta) {
 		if name != "default" {
-			return false, fmt.Errorf("unsupported [meta] field %q", name)
+			addDiagnostic(diagnostics, positions, "meta."+name, "unsupported [meta] field %q", name)
 		}
 	}
 	defaultValue, ok := meta["default"].(string)
 	if !ok {
-		return false, fmt.Errorf("[meta].default must be a string layer reference")
+		addDiagnostic(diagnostics, positions, "meta.default", "[meta].default must be a string layer reference")
+		return false
 	}
 	defaultLayer, ok := strings.CutPrefix(defaultValue, "&")
 	if !ok || defaultLayer == "" {
-		return false, fmt.Errorf("[meta].default must reference a layer with &")
+		addDiagnostic(diagnostics, positions, "meta.default", "[meta].default must reference a layer with &")
+		return false
 	}
 
-	source, err := parseDefinition(sourceValue, "[src]")
-	if err != nil {
-		return false, err
-	}
+	source, sourceOK := parseDefinition(sourceValue, "[src]", positions, diagnostics)
 	layerValue, ok := raw[defaultLayer]
 	if !ok {
-		return false, fmt.Errorf("[meta].default references undefined layer %q", defaultLayer)
+		addDiagnostic(diagnostics, positions, "meta.default", "[meta].default references undefined layer %q", defaultLayer)
+		return false
 	}
 	for _, layerName := range layerNames {
-		if _, err := parseDefinition(raw[layerName], "["+layerName+"]"); err != nil {
-			return false, err
+		if layerName != defaultLayer {
+			parseDefinition(raw[layerName], "["+layerName+"]", positions, diagnostics)
 		}
 	}
-	destination, err := parseDefinition(layerValue, "["+defaultLayer+"]")
-	if err != nil {
-		return false, err
+	destination, destinationOK := parseDefinition(layerValue, "["+defaultLayer+"]", positions, diagnostics)
+	if !sourceOK || !destinationOK {
+		return false
 	}
 	if len(destination) == 1 && !destination[0].escaped && destination[0].value == "#src" {
 		destination = source
 	}
 	if len(source) != len(destination) {
-		return false, fmt.Errorf("source and default layer definitions have different lengths: %d and %d", len(source), len(destination))
+		addDiagnostic(diagnostics, positions, defaultLayer+".def", "source and default layer definitions have different lengths: %d and %d", len(source), len(destination))
+		return false
 	}
 
 	for index, sourceToken := range source {
-		sourceKey, ok := virtualKey(sourceToken.value)
-		if !ok {
-			return false, fmt.Errorf("unsupported source layer key %q at position %d", sourceToken.value, index)
+		sourceKey, sourceOK := virtualKey(sourceToken.value)
+		if !sourceOK {
+			addDiagnostic(diagnostics, positions, fmt.Sprintf("src.def[%d]", index), "unsupported source layer key %q at position %d", sourceToken.value, index)
+			continue
 		}
 		if !destination[index].escaped && destination[index].value == "_" {
 			continue
 		}
-		destinationKey, ok := virtualKey(destination[index].value)
-		if !ok {
-			return false, fmt.Errorf("unsupported default layer key %q at position %d", destination[index].value, index)
+		destinationKey, destinationOK := virtualKey(destination[index].value)
+		if !destinationOK {
+			addDiagnostic(diagnostics, positions, fmt.Sprintf("%s.def[%d]", defaultLayer, index), "unsupported default layer key %q at position %d", destination[index].value, index)
+			continue
 		}
 		remap[sourceKey] = destinationKey
 	}
-	return true, nil
+	return true
 }
 
-func parseDefinition(value any, path string) ([]definitionToken, error) {
-	table, err := asTable(value, path)
-	if err != nil {
-		return nil, err
+func parseDefinition(value any, path string, positions sourcePositions, diagnostics *Diagnostics) ([]definitionToken, bool) {
+	table, ok := value.(map[string]any)
+	if !ok {
+		addDiagnostic(diagnostics, positions, strings.Trim(path, "[]"), "%s must be a TOML table", path)
+		return nil, false
 	}
-	for name := range table {
+	for _, name := range sortedKeys(table) {
 		if name != "def" {
-			return nil, fmt.Errorf("unsupported %s field %q", path, name)
+			addDiagnostic(diagnostics, positions, strings.Trim(path, "[]")+"."+name, "unsupported %s field %q", path, name)
 		}
 	}
 	definition, ok := table["def"]
 	if !ok {
-		return nil, fmt.Errorf("%s.def is required", path)
+		addDiagnostic(diagnostics, positions, strings.Trim(path, "[]")+".def", "%s.def is required", path)
+		return nil, false
 	}
+	definitionPath := strings.Trim(path, "[]") + ".def"
 	switch definition := definition.(type) {
 	case string:
 		if strings.TrimSpace(definition) == "#src" {
-			return []definitionToken{{value: "#src"}}, nil
+			return []definitionToken{{value: "#src"}}, true
 		}
 		tokens, err := splitDefinition(definition)
 		if err != nil {
-			return nil, fmt.Errorf("%s.def: %w", path, err)
+			addDiagnostic(diagnostics, positions, definitionPath, "%s.def: %v", path, err)
+			return nil, false
 		}
-		return tokens, nil
+		return tokens, true
 	case []any:
 		keys := make([]definitionToken, len(definition))
+		valid := true
 		for index, value := range definition {
 			key, ok := value.(string)
 			if !ok {
-				return nil, fmt.Errorf("%s.def entry at position %d must be a string", path, index)
+				addDiagnostic(diagnostics, positions, fmt.Sprintf("%s[%d]", definitionPath, index), "%s.def entry at position %d must be a string", path, index)
+				valid = false
+				continue
 			}
 			unescaped, err := unescapeKeyName(key)
 			if err != nil {
-				return nil, fmt.Errorf("%s.def entry at position %d: %w", path, index, err)
+				addDiagnostic(diagnostics, positions, fmt.Sprintf("%s[%d]", definitionPath, index), "%s.def entry at position %d: %v", path, index, err)
+				valid = false
+				continue
 			}
 			keys[index] = definitionToken{value: unescaped, escaped: unescaped != key}
 		}
-		return keys, nil
+		if !valid {
+			return nil, false
+		}
+		return keys, true
 	default:
-		return nil, fmt.Errorf("%s.def must be a string or string array", path)
+		addDiagnostic(diagnostics, positions, definitionPath, "%s.def must be a string or string array", path)
+		return nil, false
 	}
+}
+
+func sortedKeys(table map[string]any) []string {
+	keys := make([]string, 0, len(table))
+	for key := range table {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	return keys
+}
+
+func sortedKeysByPosition(table map[string]any, positions sourcePositions, path string) []string {
+	keys := sortedKeys(table)
+	sort.SliceStable(keys, func(left, right int) bool {
+		leftPosition := positions[path+"."+keys[left]]
+		rightPosition := positions[path+"."+keys[right]]
+		if leftPosition.line != rightPosition.line {
+			return leftPosition.line < rightPosition.line
+		}
+		if leftPosition.column != rightPosition.column {
+			return leftPosition.column < rightPosition.column
+		}
+		return keys[left] < keys[right]
+	})
+	return keys
 }
 
 func splitDefinition(definition string) ([]definitionToken, error) {
@@ -308,14 +559,6 @@ func splitDefinition(definition string) ([]definitionToken, error) {
 		tokens = append(tokens, definitionToken{value: token.String()})
 	}
 	return tokens, nil
-}
-
-func asTable(value any, path string) (map[string]any, error) {
-	table, ok := value.(map[string]any)
-	if !ok {
-		return nil, fmt.Errorf("%s must be a TOML table", path)
-	}
-	return table, nil
 }
 
 func unescapeKeyName(name string) (string, error) {

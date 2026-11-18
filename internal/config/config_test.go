@@ -33,22 +33,139 @@ remaps = [
 
 func TestParseRejectsUnsupportedConfiguration(t *testing.T) {
 	_, err := Parse([]byte("[global]\norder = ['qwerty']\n"))
-	if err == nil || !strings.Contains(err.Error(), `unsupported [global] field "order"`) {
+	diagnostics, ok := err.(*Diagnostics)
+	if !ok || len(diagnostics.Items) != 1 || diagnostics.Items[0].Message != `unsupported [global] field "order"` {
 		t.Fatalf("Parse() error = %v, want unsupported field error", err)
+	}
+}
+
+func TestParseFormatsDiagnosticWithSourceLine(t *testing.T) {
+	_, err := Parse([]byte("[global]\nhotkey = 'abc'\n"))
+	diagnostics, ok := err.(*Diagnostics)
+	if !ok || len(diagnostics.Items) != 1 {
+		t.Fatalf("Parse() error = %v, want one structured error", err)
+	}
+	if got := diagnostics.Items[0]; got.SourceLine != "hotkey = 'abc'" || got.Line != 2 || got.Column != 1 {
+		t.Fatalf("error = %#v, want source and position", got)
+	}
+}
+
+func TestParseCollectsUnsupportedGlobalFields(t *testing.T) {
+	_, err := Parse([]byte("[global]\nhotkeys = []\naliases = []\n"))
+	if err == nil {
+		t.Fatal("Parse() error = nil, want unsupported field errors")
+	}
+	for _, want := range []string{
+		`unsupported [global] field "hotkeys"`,
+		`unsupported [global] field "aliases"`,
+	} {
+		if !hasErrorMessage(err, want) {
+			t.Errorf("Parse() error = %v, want %q", err, want)
+		}
+	}
+}
+
+func TestParseReportsTomlSyntaxErrorPosition(t *testing.T) {
+	_, err := Parse([]byte("[global]\nremaps = [{ caps = \"ctrl\" }\n"))
+	diagnostics, ok := err.(*Diagnostics)
+	if !ok {
+		t.Fatalf("Parse() error type = %T, want *Diagnostics", err)
+	}
+	if len(diagnostics.Items) != 1 {
+		t.Fatalf("len(Diagnostics) = %d, want 1", len(diagnostics.Items))
+	}
+	diagnostic := diagnostics.Items[0]
+	if diagnostic.Line != 2 || diagnostic.Column < 1 {
+		t.Errorf("syntax diagnostic position = %d:%d, want line 2", diagnostic.Line, diagnostic.Column)
+	}
+	if diagnostic.Message == "" {
+		t.Errorf("syntax diagnostic message = %q, want a parser message", diagnostic.Message)
+	}
+	if diagnostic.Line != 2 || diagnostic.Column < 1 || diagnostic.Message == "" {
+		t.Errorf("error = %#v, want line, column, and message", diagnostic)
 	}
 }
 
 func TestParseRejectsUnknownKey(t *testing.T) {
 	_, err := Parse([]byte("[global]\nremaps = [{ capslock = 'ctrl' }]\n"))
-	if err == nil || !strings.Contains(err.Error(), `unsupported remap source key "capslock"`) {
+	if err == nil || !hasErrorMessage(err, `unsupported remap source key "capslock"`) {
 		t.Fatalf("Parse() error = %v, want unsupported key error", err)
 	}
 }
 
 func TestParseRejectsInvalidRemapValue(t *testing.T) {
 	_, err := Parse([]byte("[global]\nremaps = [{ caps = 1 }]\n"))
-	if err == nil || !strings.Contains(err.Error(), "invalid remap destination") {
+	if err == nil || !hasErrorMessage(err, "invalid remap destination") {
 		t.Fatalf("Parse() error = %v, want remap destination error", err)
+	}
+}
+
+func TestParseCollectsAllRemapErrorsWithPositions(t *testing.T) {
+	_, err := Parse([]byte("[global]\nremaps = [{ caps = 1, bad = 'invalid' }, { nope = 'ctrl' }]\n"))
+	diagnostics, ok := err.(*Diagnostics)
+	if !ok {
+		t.Fatalf("Parse() error type = %T, want *Diagnostics", err)
+	}
+	if len(diagnostics.Items) != 3 {
+		t.Fatalf("len(Diagnostics) = %d, want 3: %v", len(diagnostics.Items), diagnostics)
+	}
+	for index, want := range []struct {
+		column int
+		text   string
+	}{
+		{column: 13, text: "invalid remap destination"},
+		{column: 23, text: `unsupported remap source key "bad"`},
+		{column: 44, text: `unsupported remap source key "nope"`},
+	} {
+		got := diagnostics.Items[index]
+		if got.Line != 2 || got.Column != want.column {
+			t.Errorf("diagnostic[%d] position = %d:%d, want 2:%d", index, got.Line, got.Column, want.column)
+		}
+		if !strings.Contains(got.Message, want.text) {
+			t.Errorf("diagnostic[%d] message = %q, want %q", index, got.Message, want.text)
+		}
+	}
+	if diagnostics.Items[0].Column != 13 || diagnostics.Items[2].Column != 44 {
+		t.Errorf("errors = %#v, want all positions", diagnostics.Items)
+	}
+}
+
+func TestParseCollectsIndependentLayerErrors(t *testing.T) {
+	_, err := Parse([]byte(`
+[meta]
+default = "&default"
+
+[src]
+def = ["invalid"]
+
+[default]
+def = ["also-invalid"]
+
+[other]
+extra = true
+`))
+	diagnostics, ok := err.(*Diagnostics)
+	if !ok {
+		t.Fatalf("Parse() error type = %T, want *Diagnostics", err)
+	}
+	if len(diagnostics.Items) != 3 {
+		t.Fatalf("len(Diagnostics) = %d, want 3: %v", len(diagnostics.Items), diagnostics)
+	}
+	for _, want := range []string{
+		`unsupported source layer key "invalid"`,
+		`unsupported [other] field "extra"`,
+		`[other].def is required`,
+	} {
+		found := false
+		for _, diagnostic := range diagnostics.Items {
+			if strings.Contains(diagnostic.Message, want) {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("errors = %#v, want %q", diagnostics.Items, want)
+		}
 	}
 }
 
@@ -102,6 +219,33 @@ def = "#src"
 	}
 	if got := config.Remap[vkA+1]; got != vkA+1 {
 		t.Errorf("b remap = %#x, want %#x", got, vkA+1)
+	}
+}
+
+func TestParseStaticDefaultLayerReportsInvalidSourceOnce(t *testing.T) {
+	_, err := Parse([]byte(`
+[meta]
+default = "&qwerty"
+
+[src]
+def = ["invalid"]
+
+[qwerty]
+def = "#src"
+`))
+	diagnostics, ok := err.(*Diagnostics)
+	if !ok {
+		t.Fatalf("Parse() error type = %T, want *errors.Diagnostics", err)
+	}
+	if len(diagnostics.Items) != 1 {
+		t.Fatalf("len(errors) = %d, want 1: %#v", len(diagnostics.Items), diagnostics.Items)
+	}
+	got := diagnostics.Items[0]
+	if got.Message != `unsupported source layer key "invalid" at position 0` {
+		t.Errorf("error message = %q, want source-layer error", got.Message)
+	}
+	if got.Line != 6 || got.Column != 8 {
+		t.Errorf("error position = %d:%d, want 6:8", got.Line, got.Column)
 	}
 }
 
@@ -177,11 +321,24 @@ func TestParseRejectsInvalidStaticLayer(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			_, err := Parse([]byte(test.data))
-			if err == nil || !strings.Contains(err.Error(), test.want) {
+			if err == nil || !hasErrorMessage(err, test.want) {
 				t.Fatalf("Parse() error = %v, want %q", err, test.want)
 			}
 		})
 	}
+}
+
+func hasErrorMessage(err error, want string) bool {
+	diagnostics, ok := err.(*Diagnostics)
+	if !ok {
+		return false
+	}
+	for _, diagnostic := range diagnostics.Items {
+		if strings.Contains(diagnostic.Message, want) {
+			return true
+		}
+	}
+	return false
 }
 
 func TestResolveConfigPath(t *testing.T) {
