@@ -16,12 +16,22 @@ import (
 // Config contains the active static key remapping.
 type Config struct {
 	Remap map[uint16]uint16
+	Noop  map[uint16]bool
 }
 
 type definitionToken struct {
 	value   string
 	escaped bool
+	action  Action
 }
+
+// Action identifies a configured action.
+type Action uint8
+
+const (
+	noAction Action = iota
+	NoopAction
+)
 
 type sourcePosition struct {
 	line        int
@@ -29,6 +39,62 @@ type sourcePosition struct {
 	length      int
 	sourceLine  string
 	sourceLines []string
+}
+
+func parseActions(value any, path string, positions sourcePositions, diagnostics *Diagnostics) map[string]Action {
+	actions := make(map[string]Action)
+	if value == nil {
+		return actions
+	}
+	table, ok := value.(map[string]any)
+	if !ok {
+		addDiagnostic(diagnostics, positions, path, "%s must be a TOML table", path)
+		return actions
+	}
+	for _, name := range sortedKeys(table) {
+		body, ok := table[name].(map[string]any)
+		if !ok || len(body) != 1 {
+			addDiagnostic(diagnostics, positions, path+"."+name, "action %q must contain exactly one action", name)
+			continue
+		}
+		args, ok := body["noop"]
+		if !ok {
+			addDiagnostic(diagnostics, positions, path+"."+name, "unsupported action in %q", name)
+			continue
+		}
+		arguments, ok := args.([]any)
+		if !ok || len(arguments) != 0 {
+			addDiagnostic(diagnostics, positions, path+"."+name+".noop", "noop action does not accept arguments")
+			continue
+		}
+		actions[name] = NoopAction
+	}
+	return actions
+}
+
+func resolveAction(value string, actions map[string]Action) (Action, bool) {
+	if !strings.HasPrefix(value, "@") || len(value) == 1 {
+		return noAction, false
+	}
+	action, ok := actions[value[1:]]
+	return action, ok
+}
+
+func resolveDefinitionActions(tokens []definitionToken, actions map[string]Action, path string, positions sourcePositions, diagnostics *Diagnostics) ([]definitionToken, bool) {
+	valid := true
+	for index := range tokens {
+		if tokens[index].escaped || !strings.HasPrefix(tokens[index].value, "@") {
+			continue
+		}
+		action, ok := resolveAction(tokens[index].value, actions)
+		if !ok {
+			addDiagnostic(diagnostics, positions, fmt.Sprintf("%s[%d]", path, index), "undefined action %q", strings.TrimPrefix(tokens[index].value, "@"))
+			valid = false
+			continue
+		}
+		tokens[index].action = action
+	}
+	return tokens, valid
 }
 
 type sourcePositions map[string]sourcePosition
@@ -214,26 +280,32 @@ func Parse(data []byte) (Config, error) {
 	}
 
 	diagnostics := NewDiagnostics()
-	global := parseGlobal(raw, positions, diagnostics)
+	globalRemap, globalNoop := parseGlobal(raw, positions, diagnostics)
 
 	remap := make(map[uint16]uint16)
-	hasLayers := resolveLayers(raw, remap, positions, diagnostics)
+	noop := make(map[uint16]bool)
+	hasLayers := resolveLayers(raw, remap, noop, positions, diagnostics)
 	if len(diagnostics.Items) != 0 {
 		return Config{}, diagnostics
 	}
-	if !hasLayers && len(global) == 0 {
+	if !hasLayers && len(globalRemap) == 0 && len(globalNoop) == 0 {
 		addDiagnostic(diagnostics, positions, "global", "config must define at least one [global].remaps entry")
 	}
-	for source, destination := range global {
+	for source, destination := range globalRemap {
 		remap[source] = destination
+		delete(noop, source)
 	}
-	if len(remap) == 0 {
+	for source := range globalNoop {
+		delete(remap, source)
+		noop[source] = true
+	}
+	if len(remap) == 0 && len(noop) == 0 {
 		addDiagnostic(diagnostics, positions, "global.remaps", "config must define at least one mapping")
 	}
 	if len(diagnostics.Items) != 0 {
 		return Config{}, diagnostics
 	}
-	return Config{Remap: remap}, nil
+	return Config{Remap: remap, Noop: noop}, nil
 }
 
 func addDiagnostic(e *Diagnostics, positions sourcePositions, path, format string, args ...any) {
@@ -251,30 +323,32 @@ func addDiagnostic(e *Diagnostics, positions sourcePositions, path, format strin
 	})
 }
 
-func parseGlobal(raw map[string]any, positions sourcePositions, diagnostics *Diagnostics) map[uint16]uint16 {
+func parseGlobal(raw map[string]any, positions sourcePositions, diagnostics *Diagnostics) (map[uint16]uint16, map[uint16]bool) {
 	value, ok := raw["global"]
 	if !ok {
-		return map[uint16]uint16{}
+		return map[uint16]uint16{}, map[uint16]bool{}
 	}
 	table, ok := value.(map[string]any)
 	if !ok {
 		addDiagnostic(diagnostics, positions, "global", "[global] must be a TOML table")
-		return map[uint16]uint16{}
+		return map[uint16]uint16{}, map[uint16]bool{}
 	}
 	remap := make(map[uint16]uint16)
+	noop := make(map[uint16]bool)
+	actions := parseActions(table["actions"], "global.actions", positions, diagnostics)
 	for _, name := range sortedKeys(table) {
-		if name != "remaps" {
+		if name != "remaps" && name != "actions" {
 			addDiagnostic(diagnostics, positions, "global."+name, "unsupported [global] field %q", name)
 		}
 	}
 
 	remapValue, ok := table["remaps"]
 	if !ok {
-		return remap
+		return remap, noop
 	}
 	switch remaps := remapValue.(type) {
 	case map[string]any:
-		mergeRemap(remap, remaps, positions, diagnostics, "global.remaps")
+		mergeRemap(remap, noop, remaps, actions, positions, diagnostics, "global.remaps")
 	case []any:
 		for index, value := range remaps {
 			path := fmt.Sprintf("global.remaps[%d]", index)
@@ -283,15 +357,15 @@ func parseGlobal(raw map[string]any, positions sourcePositions, diagnostics *Dia
 				addDiagnostic(diagnostics, positions, path, "[global].remaps[%d] must be a TOML table", index)
 				continue
 			}
-			mergeRemap(remap, entries, positions, diagnostics, path)
+			mergeRemap(remap, noop, entries, actions, positions, diagnostics, path)
 		}
 	default:
 		addDiagnostic(diagnostics, positions, "global.remaps", "[global].remaps must be a TOML table or table array")
 	}
-	return remap
+	return remap, noop
 }
 
-func mergeRemap(remap map[uint16]uint16, entries map[string]any, positions sourcePositions, diagnostics *Diagnostics, path string) {
+func mergeRemap(remap map[uint16]uint16, noop map[uint16]bool, entries map[string]any, actions map[string]Action, positions sourcePositions, diagnostics *Diagnostics, path string) {
 	for _, sourceName := range sortedKeysByPosition(entries, positions, path) {
 		value := entries[sourceName]
 		destinationName, ok := value.(string)
@@ -302,6 +376,22 @@ func mergeRemap(remap map[uint16]uint16, entries map[string]any, positions sourc
 		unescapedSourceName, err := unescapeKeyName(sourceName)
 		if err != nil {
 			addDiagnostic(diagnostics, positions, path+"."+sourceName, "invalid remap source key: %v", err)
+			continue
+		}
+		if strings.HasPrefix(destinationName, "@") {
+			action, ok := resolveAction(destinationName, actions)
+			if !ok {
+				addDiagnostic(diagnostics, positions, path+"."+sourceName, "undefined action %q", destinationName[1:])
+				continue
+			}
+			source, ok := virtualKey(unescapedSourceName)
+			if !ok {
+				addDiagnostic(diagnostics, positions, path+"."+sourceName, "unsupported remap source key %q", unescapedSourceName)
+				continue
+			}
+			if action == NoopAction {
+				noop[source] = true
+			}
 			continue
 		}
 		destinationName, err = unescapeKeyName(destinationName)
@@ -323,7 +413,7 @@ func mergeRemap(remap map[uint16]uint16, entries map[string]any, positions sourc
 	}
 }
 
-func resolveLayers(raw map[string]any, remap map[uint16]uint16, positions sourcePositions, diagnostics *Diagnostics) bool {
+func resolveLayers(raw map[string]any, remap map[uint16]uint16, noop map[uint16]bool, positions sourcePositions, diagnostics *Diagnostics) bool {
 	_, hasMeta := raw["meta"]
 	sourceValue, hasSource := raw["src"]
 	var layerNames []string
@@ -349,7 +439,7 @@ func resolveLayers(raw map[string]any, remap map[uint16]uint16, positions source
 		if len(layerNames) != 0 {
 			for _, layerName := range layerNames {
 				addDiagnostic(diagnostics, positions, layerName, "layer table %q requires [meta] and [src]", layerName)
-				parseDefinition(raw[layerName], "["+layerName+"]", positions, diagnostics)
+				parseDefinition(raw[layerName], "["+layerName+"]", nil, positions, diagnostics)
 			}
 		}
 		return false
@@ -362,7 +452,7 @@ func resolveLayers(raw map[string]any, remap map[uint16]uint16, positions source
 	}
 	if !hasMeta || !hasSource {
 		for _, layerName := range layerNames {
-			parseDefinition(raw[layerName], "["+layerName+"]", positions, diagnostics)
+			parseDefinition(raw[layerName], "["+layerName+"]", nil, positions, diagnostics)
 		}
 		return false
 	}
@@ -388,7 +478,11 @@ func resolveLayers(raw map[string]any, remap map[uint16]uint16, positions source
 		return false
 	}
 
-	source, sourceOK := parseDefinition(sourceValue, "[src]", positions, diagnostics)
+	sourceActions := parseActions(nil, "src.actions", positions, diagnostics)
+	if sourceTable, ok := sourceValue.(map[string]any); ok {
+		sourceActions = parseActions(sourceTable["actions"], "src.actions", positions, diagnostics)
+	}
+	source, sourceOK := parseDefinition(sourceValue, "[src]", sourceActions, positions, diagnostics)
 	layerValue, ok := raw[defaultLayer]
 	if !ok {
 		addDiagnostic(diagnostics, positions, "meta.default", "[meta].default references undefined layer %q", defaultLayer)
@@ -396,10 +490,12 @@ func resolveLayers(raw map[string]any, remap map[uint16]uint16, positions source
 	}
 	for _, layerName := range layerNames {
 		if layerName != defaultLayer {
-			parseDefinition(raw[layerName], "["+layerName+"]", positions, diagnostics)
+			parseDefinition(raw[layerName], "["+layerName+"]", nil, positions, diagnostics)
 		}
 	}
-	destination, destinationOK := parseDefinition(layerValue, "["+defaultLayer+"]", positions, diagnostics)
+	layerTable, _ := layerValue.(map[string]any)
+	actions := parseActions(layerTable["actions"], defaultLayer+".actions", positions, diagnostics)
+	destination, destinationOK := parseDefinition(layerValue, "["+defaultLayer+"]", actions, positions, diagnostics)
 	if !sourceOK || !destinationOK {
 		return false
 	}
@@ -420,6 +516,10 @@ func resolveLayers(raw map[string]any, remap map[uint16]uint16, positions source
 		if !destination[index].escaped && destination[index].value == "_" {
 			continue
 		}
+		if destination[index].action == NoopAction {
+			noop[sourceKey] = true
+			continue
+		}
 		destinationKey, destinationOK := virtualKey(destination[index].value)
 		if !destinationOK {
 			addDiagnostic(diagnostics, positions, fmt.Sprintf("%s.def[%d]", defaultLayer, index), "unsupported default layer key %q at position %d", destination[index].value, index)
@@ -430,14 +530,14 @@ func resolveLayers(raw map[string]any, remap map[uint16]uint16, positions source
 	return true
 }
 
-func parseDefinition(value any, path string, positions sourcePositions, diagnostics *Diagnostics) ([]definitionToken, bool) {
+func parseDefinition(value any, path string, actions map[string]Action, positions sourcePositions, diagnostics *Diagnostics) ([]definitionToken, bool) {
 	table, ok := value.(map[string]any)
 	if !ok {
 		addDiagnostic(diagnostics, positions, strings.Trim(path, "[]"), "%s must be a TOML table", path)
 		return nil, false
 	}
 	for _, name := range sortedKeys(table) {
-		if name != "def" {
+		if name != "def" && name != "actions" {
 			addDiagnostic(diagnostics, positions, strings.Trim(path, "[]")+"."+name, "unsupported %s field %q", path, name)
 		}
 	}
@@ -457,7 +557,7 @@ func parseDefinition(value any, path string, positions sourcePositions, diagnost
 			addDiagnostic(diagnostics, positions, definitionPath, "%s.def: %v", path, err)
 			return nil, false
 		}
-		return tokens, true
+		return resolveDefinitionActions(tokens, actions, definitionPath, positions, diagnostics)
 	case []any:
 		keys := make([]definitionToken, len(definition))
 		valid := true
@@ -479,7 +579,7 @@ func parseDefinition(value any, path string, positions sourcePositions, diagnost
 		if !valid {
 			return nil, false
 		}
-		return keys, true
+		return resolveDefinitionActions(keys, actions, definitionPath, positions, diagnostics)
 	default:
 		addDiagnostic(diagnostics, positions, definitionPath, "%s.def must be a string or string array", path)
 		return nil, false

@@ -51,6 +51,22 @@ a = "b"
 	}
 }
 
+func TestParseRemapsTableSupportsNoopAction(t *testing.T) {
+	config, err := Parse([]byte(`
+[global.remaps]
+x = "@disable"
+
+[global.actions]
+disable = { noop = [] }
+`))
+	if err != nil {
+		t.Fatalf("Parse() error = %v", err)
+	}
+	if !config.Noop[vkA+23] {
+		t.Fatalf("Noop[x] = false, want true")
+	}
+}
+
 func TestParseRejectsScalarRemaps(t *testing.T) {
 	_, err := Parse([]byte(`
 [global]
@@ -61,11 +77,51 @@ remaps = "invalid"
 	}
 }
 
-func TestParseRejectsUnsupportedConfiguration(t *testing.T) {
-	_, err := Parse([]byte("[global]\norder = ['qwerty']\n"))
-	diagnostics, ok := err.(*Diagnostics)
-	if !ok || len(diagnostics.Items) != 1 || diagnostics.Items[0].Message != `unsupported [global] field "order"` {
-		t.Fatalf("Parse() error = %v, want unsupported field error", err)
+func TestParseGlobalNoopActionReference(t *testing.T) {
+	config, err := Parse([]byte(`
+[global]
+remaps = [{ caps = "@disable" }]
+
+[global.actions]
+disable = { noop = [] }
+`))
+	if err != nil {
+		t.Fatalf("Parse() error = %v", err)
+	}
+	if !config.Noop[vkCapital] {
+		t.Fatalf("Noop[caps] = false, want true")
+	}
+}
+
+func TestParseLayerNoopActionReference(t *testing.T) {
+	config, err := Parse([]byte(`
+[meta]
+default = "&base"
+
+[src]
+def = ["a"]
+
+[base]
+def = ["@disable"]
+
+[base.actions]
+disable = { noop = [] }
+`))
+	if err != nil {
+		t.Fatalf("Parse() error = %v", err)
+	}
+	if !config.Noop[vkA] {
+		t.Fatalf("Noop[a] = false, want true")
+	}
+}
+
+func TestParseRejectsUnknownAction(t *testing.T) {
+	_, err := Parse([]byte(`
+[global]
+remaps = [{ caps = "@missing" }]
+`))
+	if err == nil || !hasErrorMessage(err, `undefined action "missing"`) {
+		t.Fatalf("Parse() error = %v, want undefined action error", err)
 	}
 }
 

@@ -74,7 +74,7 @@ func run(ctx context.Context, configPath string, debug bool, runner Runner) erro
 		close(stop)
 	}()
 
-	mappings := keyboard.NewMappings(loaded.Remap)
+	mappings := keyboard.NewMappingsWithActions(loaded.Remap, loaded.Noop)
 	go watchConfig(configPath, displayPath, mappings, stop, debug)
 
 	fmt.Printf("DvorakX remapping %d key(s); press Ctrl+C to stop.\n", len(loaded.Remap))
@@ -123,7 +123,7 @@ func watchConfig(path, displayPath string, mappings *keyboard.Mappings, stop <-c
 				fmt.Fprintln(os.Stderr, formatConfigError("reload", path, err, colorOutput(os.Stderr)))
 				continue
 			}
-			mappings.Replace(loaded.Remap)
+			mappings.ReplaceWithActions(loaded.Remap, loaded.Noop)
 			if debug {
 				fmt.Fprintf(os.Stderr, "dvorakv: debug: reloaded %d mapping(s) from %s\n", len(loaded.Remap), path)
 			}

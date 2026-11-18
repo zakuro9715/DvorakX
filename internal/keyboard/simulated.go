@@ -15,7 +15,7 @@ type Output interface {
 type SimulatedKeyboard struct {
 	mappings *Mappings
 	output   Output
-	pressed  map[uint16]uint16
+	pressed  map[uint16]Mapping
 }
 
 // NewSimulatedKeyboard creates a simulated keyboard backed by mappings.
@@ -23,7 +23,7 @@ func NewSimulatedKeyboard(mappings *Mappings, output Output) *SimulatedKeyboard 
 	return &SimulatedKeyboard{
 		mappings: mappings,
 		output:   output,
-		pressed:  make(map[uint16]uint16),
+		pressed:  make(map[uint16]Mapping),
 	}
 }
 
@@ -32,35 +32,38 @@ func NewSimulatedKeyboard(mappings *Mappings, output Output) *SimulatedKeyboard 
 // It returns false when the event is not mapped or the output rejects it, so
 // callers can pass the original event through to the operating system.
 func (k *SimulatedKeyboard) Handle(event Event) (bool, error) {
-	destination, ok := k.destination(event)
+	mapping, ok := k.mapping(event)
 	if !ok {
 		return false, nil
 	}
+	if mapping.Noop {
+		return true, nil
+	}
 
-	if err := k.output.Send(Event{VirtualKey: destination, KeyUp: event.KeyUp}); err != nil {
+	if err := k.output.Send(Event{VirtualKey: mapping.Destination, KeyUp: event.KeyUp}); err != nil {
 		return false, err
 	}
 	return true, nil
 }
 
-func (k *SimulatedKeyboard) destination(event Event) (uint16, bool) {
+func (k *SimulatedKeyboard) mapping(event Event) (Mapping, bool) {
 	if event.KeyUp {
-		destination, ok := k.pressed[event.VirtualKey]
+		mapping, ok := k.pressed[event.VirtualKey]
 		if !ok {
-			return 0, false
+			return Mapping{}, false
 		}
 		delete(k.pressed, event.VirtualKey)
-		return destination, true
+		return mapping, true
 	}
 
-	if destination, ok := k.pressed[event.VirtualKey]; ok {
-		return destination, true
+	if mapping, ok := k.pressed[event.VirtualKey]; ok {
+		return mapping, true
 	}
 
-	destination, ok := k.mappings.Load()[event.VirtualKey]
+	mapping, ok := k.mappings.lookup(event.VirtualKey)
 	if !ok {
-		return 0, false
+		return Mapping{}, false
 	}
-	k.pressed[event.VirtualKey] = destination
-	return destination, true
+	k.pressed[event.VirtualKey] = mapping
+	return mapping, true
 }
