@@ -346,23 +346,47 @@ func parseGlobal(raw map[string]any, positions sourcePositions, diagnostics *Dia
 	if !ok {
 		return remap, noop
 	}
-	switch remaps := remapValue.(type) {
-	case map[string]any:
-		mergeRemap(remap, noop, remaps, actions, positions, diagnostics, "global.remaps")
-	case []any:
-		for index, value := range remaps {
-			path := fmt.Sprintf("global.remaps[%d]", index)
-			entries, ok := value.(map[string]any)
-			if !ok {
-				addDiagnostic(diagnostics, positions, path, "[global].remaps[%d] must be a TOML table", index)
-				continue
-			}
-			mergeRemap(remap, noop, entries, actions, positions, diagnostics, path)
-		}
-	default:
-		addDiagnostic(diagnostics, positions, "global.remaps", "[global].remaps must be a TOML table or table array")
+	layerRemap, layerNoop := parseRemaps(remapValue, "global.remaps", actions, positions, diagnostics)
+	for source, destination := range layerRemap {
+		remap[source] = destination
+		delete(noop, source)
+	}
+	for source := range layerNoop {
+		delete(remap, source)
+		noop[source] = true
 	}
 	return remap, noop
+}
+
+func parseRemaps(value any, path string, actions map[string]Action, positions sourcePositions, diagnostics *Diagnostics) (map[uint16]uint16, map[uint16]bool) {
+	remap := make(map[uint16]uint16)
+	noop := make(map[uint16]bool)
+	displayPath := remapDisplayPath(path)
+	switch remaps := value.(type) {
+	case map[string]any:
+		mergeRemap(remap, noop, remaps, actions, positions, diagnostics, path)
+	case []any:
+		for index, value := range remaps {
+			entryPath := fmt.Sprintf("%s[%d]", path, index)
+			entries, ok := value.(map[string]any)
+			if !ok {
+				addDiagnostic(diagnostics, positions, entryPath, "%s[%d] must be a TOML table", displayPath, index)
+				continue
+			}
+			mergeRemap(remap, noop, entries, actions, positions, diagnostics, entryPath)
+		}
+	default:
+		addDiagnostic(diagnostics, positions, path, "%s must be a TOML table or table array", displayPath)
+	}
+	return remap, noop
+}
+
+func remapDisplayPath(path string) string {
+	separator := strings.IndexByte(path, '.')
+	if separator < 0 {
+		return path
+	}
+	return "[" + path[:separator] + "]" + path[separator:]
 }
 
 func mergeRemap(remap map[uint16]uint16, noop map[uint16]bool, entries map[string]any, actions map[string]Action, positions sourcePositions, diagnostics *Diagnostics, path string) {
@@ -439,7 +463,7 @@ func resolveLayers(raw map[string]any, remap map[uint16]uint16, noop map[uint16]
 		if len(layerNames) != 0 {
 			for _, layerName := range layerNames {
 				addDiagnostic(diagnostics, positions, layerName, "layer table %q requires [meta] and [src]", layerName)
-				parseDefinition(raw[layerName], "["+layerName+"]", nil, positions, diagnostics)
+				parseLayer(raw[layerName], layerName, positions, diagnostics)
 			}
 		}
 		return false
@@ -452,7 +476,7 @@ func resolveLayers(raw map[string]any, remap map[uint16]uint16, noop map[uint16]
 	}
 	if !hasMeta || !hasSource {
 		for _, layerName := range layerNames {
-			parseDefinition(raw[layerName], "["+layerName+"]", nil, positions, diagnostics)
+			parseLayer(raw[layerName], layerName, positions, diagnostics)
 		}
 		return false
 	}
@@ -490,11 +514,12 @@ func resolveLayers(raw map[string]any, remap map[uint16]uint16, noop map[uint16]
 	}
 	for _, layerName := range layerNames {
 		if layerName != defaultLayer {
-			parseDefinition(raw[layerName], "["+layerName+"]", nil, positions, diagnostics)
+			parseLayer(raw[layerName], layerName, positions, diagnostics)
 		}
 	}
 	layerTable, _ := layerValue.(map[string]any)
 	actions := parseActions(layerTable["actions"], defaultLayer+".actions", positions, diagnostics)
+	layerRemap, layerNoop := parseLayerRemaps(layerTable, defaultLayer, actions, positions, diagnostics)
 	destination, destinationOK := parseDefinition(layerValue, "["+defaultLayer+"]", actions, positions, diagnostics)
 	if !sourceOK || !destinationOK {
 		return false
@@ -527,7 +552,34 @@ func resolveLayers(raw map[string]any, remap map[uint16]uint16, noop map[uint16]
 		}
 		remap[sourceKey] = destinationKey
 	}
+	for source, destination := range layerRemap {
+		remap[source] = destination
+		delete(noop, source)
+	}
+	for source := range layerNoop {
+		delete(remap, source)
+		noop[source] = true
+	}
 	return true
+}
+
+func parseLayer(value any, layerName string, positions sourcePositions, diagnostics *Diagnostics) {
+	table, ok := value.(map[string]any)
+	if !ok {
+		parseDefinition(value, "["+layerName+"]", nil, positions, diagnostics)
+		return
+	}
+	actions := parseActions(table["actions"], layerName+".actions", positions, diagnostics)
+	parseDefinition(value, "["+layerName+"]", actions, positions, diagnostics)
+	parseLayerRemaps(table, layerName, actions, positions, diagnostics)
+}
+
+func parseLayerRemaps(table map[string]any, layerName string, actions map[string]Action, positions sourcePositions, diagnostics *Diagnostics) (map[uint16]uint16, map[uint16]bool) {
+	value, ok := table["remaps"]
+	if !ok {
+		return map[uint16]uint16{}, map[uint16]bool{}
+	}
+	return parseRemaps(value, layerName+".remaps", actions, positions, diagnostics)
 }
 
 func parseDefinition(value any, path string, actions map[string]Action, positions sourcePositions, diagnostics *Diagnostics) ([]definitionToken, bool) {
@@ -537,7 +589,7 @@ func parseDefinition(value any, path string, actions map[string]Action, position
 		return nil, false
 	}
 	for _, name := range sortedKeys(table) {
-		if name != "def" && name != "actions" {
+		if name != "def" && name != "actions" && name != "remaps" {
 			addDiagnostic(diagnostics, positions, strings.Trim(path, "[]")+"."+name, "unsupported %s field %q", path, name)
 		}
 	}

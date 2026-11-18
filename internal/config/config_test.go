@@ -67,6 +67,92 @@ disable = { noop = [] }
 	}
 }
 
+func TestParseLayerRemapsApplyAfterDefinitionAndBeforeGlobal(t *testing.T) {
+	config, err := Parse([]byte(`
+[global.remaps]
+a = "d"
+
+[meta]
+default = "&base"
+
+[src]
+def = ["a", "b", "c"]
+
+[base]
+def = ["b", "c", "a"]
+remaps = [
+  { a = "c" },
+	{ x = "z" },
+  { z = "x" },
+]
+`))
+	if err != nil {
+		t.Fatalf("Parse() error = %v", err)
+	}
+	if got := config.Remap[vkA]; got != vkA+3 {
+		t.Errorf("a remap = %#x, want %#x", got, vkA+3)
+	}
+	if got := config.Remap[vkA+1]; got != vkA+2 {
+		t.Errorf("b remap = %#x, want %#x", got, vkA+2)
+	}
+	if got := config.Remap[vkA+2]; got != vkA {
+		t.Errorf("c remap = %#x, want %#x", got, vkA)
+	}
+	if got := config.Remap[vkA+23]; got != vkZ {
+		t.Errorf("x remap = %#x, want %#x", got, vkZ)
+	}
+	if got := config.Remap[vkZ]; got != vkA+23 {
+		t.Errorf("z remap = %#x, want %#x", got, vkA+23)
+	}
+}
+
+func TestParseLayerRemapsUseLayerActions(t *testing.T) {
+	config, err := Parse([]byte(`
+[meta]
+default = "&base"
+
+[src]
+def = ["a"]
+
+[base]
+def = ["a"]
+
+[base.remaps]
+z = "@disable"
+
+[base.actions]
+disable = { noop = [] }
+`))
+	if err != nil {
+		t.Fatalf("Parse() error = %v", err)
+	}
+	if !config.Noop[vkZ] {
+		t.Fatal("Noop[z] = false, want true")
+	}
+}
+
+func TestParseNonDefaultLayerRemapsAreValidated(t *testing.T) {
+	_, err := Parse([]byte(`
+[meta]
+default = "&base"
+
+[src]
+def = ["a"]
+
+[base]
+def = ["a"]
+
+[other]
+def = ["a"]
+
+[other.remaps]
+invalid = "ctrl"
+`))
+	if err == nil || !hasErrorMessage(err, `unsupported remap source key "invalid"`) {
+		t.Fatalf("Parse() error = %v, want unsupported layer remap key error", err)
+	}
+}
+
 func TestParseRejectsScalarRemaps(t *testing.T) {
 	_, err := Parse([]byte(`
 [global]

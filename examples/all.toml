@@ -19,6 +19,10 @@ def = ["b", "@disable-key", "c", "d"]
 [base.actions]
 disable-key = { noop = [] }
 
+[base.remaps]
+z = "@disable-key"
+met = "alt"
+
 # A string definition may refer to the source definition directly.
 [alternate]
 def = "#src"

@@ -27,6 +27,8 @@ func TestAllBehavior(t *testing.T) {
 		{VirtualKey: 0x41, KeyUp: true}, // A
 		{VirtualKey: 0x14},              // Caps Lock
 		{VirtualKey: 0x14, KeyUp: true}, // Caps Lock
+		{VirtualKey: 0x5B},              // Left Windows
+		{VirtualKey: 0x5B, KeyUp: true}, // Left Windows
 	} {
 		if handled, err := simulated.Handle(event); !handled || err != nil {
 			t.Fatalf("Handle(%#v) = (%t, %v), want (true, nil)", event, handled, err)
@@ -39,6 +41,8 @@ func TestAllBehavior(t *testing.T) {
 		{VirtualKey: 0x42, KeyUp: true}, // B
 		{VirtualKey: 0x58},              // X
 		{VirtualKey: 0x58, KeyUp: true}, // X
+		{VirtualKey: 0x5A},              // Z
+		{VirtualKey: 0x5A, KeyUp: true}, // Z
 	} {
 		if handled, err := simulated.Handle(event); !handled || err != nil {
 			t.Fatalf("Handle(%#v) = (%t, %v), want (true, nil)", event, handled, err)
@@ -50,6 +54,8 @@ func TestAllBehavior(t *testing.T) {
 		{VirtualKey: 0x42, KeyUp: true}, // B
 		{VirtualKey: 0x11},              // Ctrl
 		{VirtualKey: 0x11, KeyUp: true}, // Ctrl
+		{VirtualKey: 0x12},              // Alt
+		{VirtualKey: 0x12, KeyUp: true}, // Alt
 	}
 	if !reflect.DeepEqual(output.events, want) {
 		t.Errorf("output events = %#v, want %#v", output.events, want)
