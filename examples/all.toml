@@ -1,0 +1,24 @@
+# DvorakX configuration reference for the currently implemented syntax.
+
+[meta]
+default = "&base"
+
+[global]
+actions = { block-key = { noop = [] } }
+remaps = [
+	{ caps = "ctrl" },
+	{ x = "@block-key" },
+]
+
+[src]
+def = ["a", "b", "c", "d"]
+
+[base]
+def = ["b", "@disable-key", "c", "d"]
+
+[base.actions]
+disable-key = { noop = [] }
+
+# A string definition may refer to the source definition directly.
+[alternate]
+def = "#src"
