@@ -13,10 +13,35 @@ import (
 	"github.com/pelletier/go-toml/v2/unstable"
 )
 
-// Config contains the active static key remapping.
+// Config contains the validated configuration file structure.
 type Config struct {
+	Meta   MetaConfig
+	Global LayerConfig
+	Source LayerConfig
+	Layers map[string]LayerConfig
+
+	// Remap and Noop are the resolved mappings kept for compatibility with
+	// callers that consumed the pre-structured Config representation.
 	Remap map[uint16]uint16
 	Noop  map[uint16]bool
+}
+
+// MetaConfig contains settings from the [meta] table.
+type MetaConfig struct {
+	Default string
+}
+
+// LayerConfig contains a layer definition, actions, and direct remaps.
+type LayerConfig struct {
+	Definition Definition
+	Actions    map[string]Action
+	Remaps     []map[string]string
+}
+
+// Definition preserves the source form of a layer definition.
+type Definition struct {
+	Text string
+	Keys []string
 }
 
 type definitionToken struct {
@@ -305,7 +330,109 @@ func Parse(data []byte) (Config, error) {
 	if len(diagnostics.Items) != 0 {
 		return Config{}, diagnostics
 	}
-	return Config{Remap: remap, Noop: noop}, nil
+	config := Config{
+		Meta:   captureMeta(raw),
+		Global: captureLayer(raw["global"]),
+		Source: captureLayer(raw["src"]),
+		Layers: make(map[string]LayerConfig),
+		Remap:  remap,
+		Noop:   noop,
+	}
+	for name, value := range raw {
+		if name == "meta" || name == "global" || name == "src" {
+			continue
+		}
+		config.Layers[name] = captureLayer(value)
+	}
+	return config, nil
+}
+
+func captureMeta(raw map[string]any) MetaConfig {
+	table, _ := raw["meta"].(map[string]any)
+	defaultValue, _ := table["default"].(string)
+	return MetaConfig{Default: defaultValue}
+}
+
+func captureLayer(value any) LayerConfig {
+	table, _ := value.(map[string]any)
+	layer := LayerConfig{
+		Actions: make(map[string]Action),
+		Remaps:  make([]map[string]string, 0),
+	}
+	if table == nil {
+		return layer
+	}
+	layer.Definition = captureDefinition(table["def"])
+	layer.Actions = captureActions(table["actions"])
+	layer.Remaps = captureRemaps(table["remaps"])
+	return layer
+}
+
+func captureDefinition(value any) Definition {
+	switch definition := value.(type) {
+	case string:
+		return Definition{Text: definition}
+	case []any:
+		keys := make([]string, 0, len(definition))
+		for _, value := range definition {
+			if key, ok := value.(string); ok {
+				keys = append(keys, key)
+			}
+		}
+		return Definition{Keys: keys}
+	default:
+		return Definition{}
+	}
+}
+
+func captureActions(value any) map[string]Action {
+	actions := make(map[string]Action)
+	table, _ := value.(map[string]any)
+	for name, value := range table {
+		body, _ := value.(map[string]any)
+		if arguments, ok := body["noop"].([]any); ok && len(arguments) == 0 {
+			actions[name] = NoopAction
+		}
+	}
+	return actions
+}
+
+func captureRemaps(value any) []map[string]string {
+	var tables []map[string]any
+	switch value := value.(type) {
+	case map[string]any:
+		tables = []map[string]any{value}
+	case []any:
+		for _, entry := range value {
+			if table, ok := entry.(map[string]any); ok {
+				tables = append(tables, table)
+			}
+		}
+	}
+	remaps := make([]map[string]string, 0, len(tables))
+	for _, table := range tables {
+		entries := make(map[string]string, len(table))
+		for source, destination := range table {
+			if destination, ok := destination.(string); ok {
+				entries[source] = destination
+			}
+		}
+		remaps = append(remaps, entries)
+	}
+	return remaps
+}
+
+// ResolveMappings returns the mappings consumed by the keyboard backend.
+func (c Config) ResolveMappings() (map[uint16]uint16, map[uint16]bool) {
+	remap := make(map[uint16]uint16, len(c.Remap))
+	for source, destination := range c.Remap {
+		remap[source] = destination
+	}
+	noop := make(map[uint16]bool, len(c.Noop))
+	for source, enabled := range c.Noop {
+		noop[source] = enabled
+	}
+	return remap, noop
 }
 
 func addDiagnostic(e *Diagnostics, positions sourcePositions, path, format string, args ...any) {

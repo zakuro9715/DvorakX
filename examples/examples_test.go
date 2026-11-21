@@ -14,10 +14,11 @@ func TestAllBehavior(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadFile(all.toml) error = %v", err)
 	}
+	remap, noop := loaded.ResolveMappings()
 
 	output := newRecordingOutput()
 	simulated := keyboard.NewSimulatedKeyboard(
-		keyboard.NewMappingsWithActions(loaded.Remap, loaded.Noop),
+		keyboard.NewMappingsWithActions(remap, noop),
 		output,
 	)
 

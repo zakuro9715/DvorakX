@@ -31,6 +31,53 @@ remaps = [
 	}
 }
 
+func TestParsePreservesConfigurationStructure(t *testing.T) {
+	config, err := Parse([]byte(`
+[meta]
+default = "&base"
+
+[global]
+remaps = [{ caps = "ctrl" }]
+
+[src]
+def = ["a", "b"]
+
+[base]
+def = "#src"
+
+[base.remaps]
+x = "z"
+
+[base.actions]
+disable = { noop = [] }
+`))
+	if err != nil {
+		t.Fatalf("Parse() error = %v", err)
+	}
+	if config.Meta.Default != "&base" {
+		t.Errorf("Meta.Default = %q, want &base", config.Meta.Default)
+	}
+	if len(config.Global.Remaps) != 1 || config.Global.Remaps[0]["caps"] != "ctrl" {
+		t.Errorf("Global.Remaps = %#v, want the global remap table", config.Global.Remaps)
+	}
+	if got := config.Source.Definition.Keys; len(got) != 2 || got[0] != "a" || got[1] != "b" {
+		t.Errorf("Source.Definition.Keys = %#v, want [a b]", got)
+	}
+	base, ok := config.Layers["base"]
+	if !ok {
+		t.Fatal("Layers[base] is missing")
+	}
+	if base.Definition.Text != "#src" {
+		t.Errorf("base definition = %q, want #src", base.Definition.Text)
+	}
+	if base.Remaps[0]["x"] != "z" {
+		t.Errorf("base remaps = %#v, want x -> z", base.Remaps)
+	}
+	if base.Actions["disable"] != NoopAction {
+		t.Errorf("base actions = %#v, want disable=noop", base.Actions)
+	}
+}
+
 func TestParseRemapsTable(t *testing.T) {
 	config, err := Parse([]byte(`
 [global.remaps]
