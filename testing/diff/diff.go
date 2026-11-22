@@ -65,7 +65,7 @@ func Tokens(want, got string) []Column {
 			}
 			index++
 		}
-		for pairIndex := 0; pairIndex < max(len(wantRun), len(gotRun)); pairIndex++ {
+		for pairIndex := range max(len(wantRun), len(gotRun)) {
 			column := Column{Different: true}
 			if pairIndex < len(wantRun) {
 				column.Want = wantRun[pairIndex]

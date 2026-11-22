@@ -21,7 +21,7 @@ linters:
     - govet
     - iface          # Detect the incorrect use of interfaces
     - ineffassign    # Detect useless assignments
-      #- intrange       # Use integer range for loop
+    - intrange       # Use integer range for loop
     - ireturn        # Accept Interfaces, Return Concrete Types
     - makezero
     # - mirror         # Avoid unnecessary []byte/string conversion calls
