@@ -95,7 +95,7 @@ func Start(t *testing.T, config string) *Environment {
 	environment := &Environment{t: t}
 	environment.window = createReceiverWindow(t)
 	t.Cleanup(func() {
-		procDestroyWindow.Call(environment.window)
+		_, _, _ = procDestroyWindow.Call(environment.window)
 	})
 	focusWindow(t, environment.window)
 	startRemapper(t, config)
@@ -165,7 +165,7 @@ func createReceiverWindow(t *testing.T) uintptr {
 	if window == 0 {
 		t.Fatalf("create receiver window: %v", err)
 	}
-	procShowWindow.Call(window, swShow)
+	_, _, _ = procShowWindow.Call(window, swShow)
 	return window
 }
 
@@ -175,7 +175,7 @@ func focusWindow(t *testing.T, window uintptr) {
 	if result, _, err := procSetForegroundWindow.Call(window); result == 0 {
 		t.Fatalf("focus receiver window: %v", err)
 	}
-	procSetFocus.Call(window)
+	_, _, _ = procSetFocus.Call(window)
 }
 
 func startRemapper(t *testing.T, config string) {
@@ -268,8 +268,8 @@ func pumpMessages() {
 		if result == 0 {
 			return
 		}
-		procTranslateMessage.Call(uintptr(unsafe.Pointer(&message)))
-		procDispatchMessageW.Call(uintptr(unsafe.Pointer(&message)))
+		_, _, _ = procTranslateMessage.Call(uintptr(unsafe.Pointer(&message)))
+		_, _, _ = procDispatchMessageW.Call(uintptr(unsafe.Pointer(&message)))
 	}
 }
 

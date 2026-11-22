@@ -11,7 +11,7 @@ import (
 func parseEvents(t testingT, text string) []keyboard.Event {
 	t.Helper()
 	var events []keyboard.Event
-	for _, token := range strings.Fields(stripComments(text)) {
+	for token := range strings.FieldsSeq(stripComments(text)) {
 		name, action, hasAction := strings.Cut(token, ":")
 		if name == "" || (hasAction && action != "down" && action != "up") {
 			t.Fatalf("invalid key event %q", token)
@@ -32,8 +32,8 @@ func parseEvents(t testingT, text string) []keyboard.Event {
 func stripComments(text string) string {
 	lines := strings.Split(text, "\n")
 	for index, line := range lines {
-		if comment := strings.IndexByte(line, '#'); comment >= 0 {
-			lines[index] = line[:comment]
+		if before, _, found := strings.Cut(line, "#"); found {
+			lines[index] = before
 		}
 	}
 	return strings.Join(lines, "\n")

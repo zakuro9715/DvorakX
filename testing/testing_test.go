@@ -4,15 +4,15 @@ import "fmt"
 
 type exampleTestingT struct{}
 
-func (_ *exampleTestingT) Errorf(format string, args ...interface{}) {
+func (*exampleTestingT) Errorf(format string, args ...any) {
 	panic(fmt.Sprintf(format, args...))
 }
 
-func (_ *exampleTestingT) Fatalf(format string, args ...interface{}) {
+func (*exampleTestingT) Fatalf(format string, args ...any) {
 	panic(fmt.Sprintf(format, args...))
 }
 
-func (_ *exampleTestingT) Helper() {
+func (*exampleTestingT) Helper() {
 }
 
 var t = &exampleTestingT{}

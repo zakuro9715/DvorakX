@@ -283,8 +283,7 @@ func joinPath(parent, child string) string {
 }
 
 func formatParseError(data []byte, err error) error {
-	var decodeError *toml.DecodeError
-	if errors.As(err, &decodeError) {
+	if decodeError, ok := errors.AsType[*toml.DecodeError](err); ok {
 		line, column := decodeError.Position()
 		sourceLine := sourceLine(data, line)
 		diagnostics := NewDiagnostics()
@@ -903,7 +902,7 @@ func sortedKeysByPosition(table map[string]any, positions sourcePositions, path 
 
 func splitDefinition(definition string) ([]definitionToken, error) {
 	var lines []string
-	for _, line := range strings.Split(definition, "\n") {
+	for line := range strings.SplitSeq(definition, "\n") {
 		line = strings.TrimSpace(line)
 		if line != "" && !strings.HasPrefix(line, "#") {
 			lines = append(lines, line)

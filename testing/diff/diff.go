@@ -46,7 +46,7 @@ func Tokens(want, got string) []Column {
 	columns := make([]Column, 0, len(wantTokens)+len(gotTokens))
 	for index := 0; index < len(diffs); {
 		if diffs[index].Type == diffmatchpatch.DiffEqual {
-			for _, id := range []rune(diffs[index].Text) {
+			for _, id := range diffs[index].Text {
 				columns = append(columns, Column{Want: tokens[id], Got: tokens[id]})
 			}
 			index++
@@ -56,7 +56,7 @@ func Tokens(want, got string) []Column {
 		wantRun := make([]string, 0)
 		gotRun := make([]string, 0)
 		for index < len(diffs) && diffs[index].Type != diffmatchpatch.DiffEqual {
-			for _, id := range []rune(diffs[index].Text) {
+			for _, id := range diffs[index].Text {
 				if diffs[index].Type == diffmatchpatch.DiffDelete {
 					wantRun = append(wantRun, tokens[id])
 				} else {
