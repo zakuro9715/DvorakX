@@ -13,7 +13,7 @@ linters:
     - gocheckcompilerdirectives
     - gochecknoinits
     - gocognit
-    # - goconst
+    - goconst
     - gocritic
     - gocyclo
     # - godoclint
@@ -50,6 +50,8 @@ linters:
       forbid:
         - pattern: ^print(ln)?$
         - pattern: ^fmt\.Print.*$
+    goconst:
+      ignore-tests: true
 formatters:
   enable:
     - gofumpt

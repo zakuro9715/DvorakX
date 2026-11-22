@@ -48,6 +48,8 @@ type definitionToken struct {
 	action  ActionSpec
 }
 
+const sourceDefinitionReference = "#src"
+
 // Action identifies a configured action.
 type Action uint8
 
@@ -428,8 +430,8 @@ func captureLayer(value any) LayerConfig {
 func captureDefinition(value any) Definition {
 	switch definition := value.(type) {
 	case string:
-		if strings.TrimSpace(definition) == "#src" {
-			return Definition{Text: definition, Tokens: []string{"#src"}}
+		if strings.TrimSpace(definition) == sourceDefinitionReference {
+			return Definition{Text: definition, Tokens: []string{sourceDefinitionReference}}
 		}
 		parsed, err := splitDefinition(definition)
 		tokens := strings.FieldsFunc(definition, func(r rune) bool {
@@ -767,7 +769,7 @@ func resolveDefaultLayer(sourceValue, layerValue any, defaultLayer string, remap
 	if !sourceOK || !destinationOK {
 		return false
 	}
-	if len(destination) == 1 && !destination[0].escaped && destination[0].value == "#src" {
+	if len(destination) == 1 && !destination[0].escaped && destination[0].value == sourceDefinitionReference {
 		destination = source
 	}
 	if len(source) != len(destination) {
@@ -856,8 +858,8 @@ func parseDefinition(value any, path string, actions map[string]ActionSpec, posi
 	definitionPath := strings.Trim(path, "[]") + ".def"
 	switch definition := definition.(type) {
 	case string:
-		if strings.TrimSpace(definition) == "#src" {
-			return []definitionToken{{value: "#src"}}, true
+		if strings.TrimSpace(definition) == sourceDefinitionReference {
+			return []definitionToken{{value: sourceDefinitionReference}}, true
 		}
 		tokens, err := splitDefinition(definition)
 		if err != nil {
