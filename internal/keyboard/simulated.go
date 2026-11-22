@@ -1,9 +1,9 @@
 package keyboard
 
-// Event is an OS-independent virtual key event.
+// Event is an OS-independent physical scan-code event.
 type Event struct {
-	VirtualKey uint16
-	KeyUp      bool
+	ScanCode uint16
+	KeyUp    bool
 }
 
 // Output emits simulated key events.
@@ -40,7 +40,7 @@ func (k *SimulatedKeyboard) Handle(event Event) (bool, error) {
 		return true, nil
 	}
 
-	if err := k.output.Send(Event{VirtualKey: mapping.Destination, KeyUp: event.KeyUp}); err != nil {
+	if err := k.output.Send(Event{ScanCode: mapping.Destination, KeyUp: event.KeyUp}); err != nil {
 		return false, err
 	}
 	return true, nil
@@ -48,22 +48,22 @@ func (k *SimulatedKeyboard) Handle(event Event) (bool, error) {
 
 func (k *SimulatedKeyboard) mapping(event Event) (Mapping, bool) {
 	if event.KeyUp {
-		mapping, ok := k.pressed[event.VirtualKey]
+		mapping, ok := k.pressed[event.ScanCode]
 		if !ok {
 			return Mapping{}, false
 		}
-		delete(k.pressed, event.VirtualKey)
+		delete(k.pressed, event.ScanCode)
 		return mapping, true
 	}
 
-	if mapping, ok := k.pressed[event.VirtualKey]; ok {
+	if mapping, ok := k.pressed[event.ScanCode]; ok {
 		return mapping, true
 	}
 
-	mapping, ok := k.mappings.lookup(event.VirtualKey)
+	mapping, ok := k.mappings.lookup(event.ScanCode)
 	if !ok {
 		return Mapping{}, false
 	}
-	k.pressed[event.VirtualKey] = mapping
+	k.pressed[event.ScanCode] = mapping
 	return mapping, true
 }

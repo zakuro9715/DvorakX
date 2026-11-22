@@ -20,14 +20,14 @@ remaps = [
 	if len(config.Remap) != 3 {
 		t.Fatalf("len(Remap) = %d, want 3", len(config.Remap))
 	}
-	if got := config.Remap[vkCapital]; got != vkControl {
-		t.Errorf("caps remap = %#x, want %#x", got, vkControl)
+	if got := config.Remap[scCapital]; got != scLControl {
+		t.Errorf("caps remap = %#x, want %#x", got, scLControl)
 	}
-	if got := config.Remap[vkA]; got != vkA+2 {
-		t.Errorf("a remap = %#x, want %#x", got, vkA+2)
+	if got := config.Remap[scA]; got != scC {
+		t.Errorf("a remap = %#x, want %#x", got, scC)
 	}
-	if got := config.Remap[vkA+1]; got != vkA+3 {
-		t.Errorf("b remap = %#x, want %#x", got, vkA+3)
+	if got := config.Remap[scB]; got != scD {
+		t.Errorf("b remap = %#x, want %#x", got, scD)
 	}
 }
 
@@ -43,11 +43,11 @@ a = "b"
 	if len(config.Remap) != 2 {
 		t.Fatalf("len(Remap) = %d, want 2", len(config.Remap))
 	}
-	if got := config.Remap[vkCapital]; got != vkControl {
-		t.Errorf("caps remap = %#x, want %#x", got, vkControl)
+	if got := config.Remap[scCapital]; got != scLControl {
+		t.Errorf("caps remap = %#x, want %#x", got, scLControl)
 	}
-	if got := config.Remap[vkA]; got != vkA+1 {
-		t.Errorf("a remap = %#x, want %#x", got, vkA+1)
+	if got := config.Remap[scA]; got != scB {
+		t.Errorf("a remap = %#x, want %#x", got, scB)
 	}
 }
 
@@ -62,7 +62,7 @@ disable = { noop = [] }
 	if err != nil {
 		t.Fatalf("Parse() error = %v", err)
 	}
-	if !config.Noop[vkA+23] {
+	if !config.Noop[scX] {
 		t.Fatalf("Noop[x] = false, want true")
 	}
 }
@@ -89,20 +89,20 @@ remaps = [
 	if err != nil {
 		t.Fatalf("Parse() error = %v", err)
 	}
-	if got := config.Remap[vkA]; got != vkA+3 {
-		t.Errorf("a remap = %#x, want %#x", got, vkA+3)
+	if got := config.Remap[scA]; got != scD {
+		t.Errorf("a remap = %#x, want %#x", got, scD)
 	}
-	if got := config.Remap[vkA+1]; got != vkA+2 {
-		t.Errorf("b remap = %#x, want %#x", got, vkA+2)
+	if got := config.Remap[scB]; got != scC {
+		t.Errorf("b remap = %#x, want %#x", got, scC)
 	}
-	if got := config.Remap[vkA+2]; got != vkA {
-		t.Errorf("c remap = %#x, want %#x", got, vkA)
+	if got := config.Remap[scC]; got != scA {
+		t.Errorf("c remap = %#x, want %#x", got, scA)
 	}
-	if got := config.Remap[vkA+23]; got != vkZ {
-		t.Errorf("x remap = %#x, want %#x", got, vkZ)
+	if got := config.Remap[scX]; got != scZ {
+		t.Errorf("x remap = %#x, want %#x", got, scZ)
 	}
-	if got := config.Remap[vkZ]; got != vkA+23 {
-		t.Errorf("z remap = %#x, want %#x", got, vkA+23)
+	if got := config.Remap[scZ]; got != scX {
+		t.Errorf("z remap = %#x, want %#x", got, scX)
 	}
 }
 
@@ -126,7 +126,7 @@ disable = { noop = [] }
 	if err != nil {
 		t.Fatalf("Parse() error = %v", err)
 	}
-	if !config.Noop[vkZ] {
+	if !config.Noop[scZ] {
 		t.Fatal("Noop[z] = false, want true")
 	}
 }
@@ -174,7 +174,7 @@ disable = { noop = [] }
 	if err != nil {
 		t.Fatalf("Parse() error = %v", err)
 	}
-	if !config.Noop[vkCapital] {
+	if !config.Noop[scCapital] {
 		t.Fatalf("Noop[caps] = false, want true")
 	}
 }
@@ -196,7 +196,7 @@ disable = { noop = [] }
 	if err != nil {
 		t.Fatalf("Parse() error = %v", err)
 	}
-	if !config.Noop[vkA] {
+	if !config.Noop[scA] {
 		t.Fatalf("Noop[a] = false, want true")
 	}
 }
@@ -361,14 +361,14 @@ b | _ , a
 	if err != nil {
 		t.Fatalf("Parse() error = %v", err)
 	}
-	if got := config.Remap[vkA]; got != vkA+2 {
-		t.Errorf("a remap = %#x, want %#x", got, vkA+2)
+	if got := config.Remap[scA]; got != scC {
+		t.Errorf("a remap = %#x, want %#x", got, scC)
 	}
-	if _, ok := config.Remap[vkA+1]; ok {
+	if _, ok := config.Remap[scB]; ok {
 		t.Error("b remap exists, want placeholder to leave it unmapped")
 	}
-	if got := config.Remap[vkA+2]; got != vkA {
-		t.Errorf("c remap = %#x, want %#x", got, vkA)
+	if got := config.Remap[scC]; got != scA {
+		t.Errorf("c remap = %#x, want %#x", got, scA)
 	}
 }
 
@@ -386,11 +386,11 @@ def = "#src"
 	if err != nil {
 		t.Fatalf("Parse() error = %v", err)
 	}
-	if got := config.Remap[vkA]; got != vkA {
-		t.Errorf("a remap = %#x, want %#x", got, vkA)
+	if got := config.Remap[scA]; got != scA {
+		t.Errorf("a remap = %#x, want %#x", got, scA)
 	}
-	if got := config.Remap[vkA+1]; got != vkA+1 {
-		t.Errorf("b remap = %#x, want %#x", got, vkA+1)
+	if got := config.Remap[scB]; got != scB {
+		t.Errorf("b remap = %#x, want %#x", got, scB)
 	}
 }
 
@@ -438,17 +438,17 @@ def = "{,}|{|}|{'}"
 	if err != nil {
 		t.Fatalf("Parse() error = %v", err)
 	}
-	if got := config.Remap[vkA]; got != vkOemComma {
-		t.Errorf("a remap = %#x, want %#x", got, vkOemComma)
+	if got := config.Remap[scA]; got != scOemComma {
+		t.Errorf("a remap = %#x, want %#x", got, scOemComma)
 	}
-	if got := config.Remap[vkA+1]; got != vkOem5 {
-		t.Errorf("b remap = %#x, want %#x", got, vkOem5)
+	if got := config.Remap[scB]; got != scOem5 {
+		t.Errorf("b remap = %#x, want %#x", got, scOem5)
 	}
-	if got := config.Remap[vkA+2]; got != vkOem7 {
-		t.Errorf("c remap = %#x, want %#x", got, vkOem7)
+	if got := config.Remap[scC]; got != scOem7 {
+		t.Errorf("c remap = %#x, want %#x", got, scOem7)
 	}
-	if got := config.Remap[vkOemComma]; got != vkOem5 {
-		t.Errorf("comma remap = %#x, want %#x", got, vkOem5)
+	if got := config.Remap[scOemComma]; got != scOem5 {
+		t.Errorf("comma remap = %#x, want %#x", got, scOem5)
 	}
 }
 

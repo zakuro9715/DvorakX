@@ -408,7 +408,7 @@ func mergeRemap(remap map[uint16]uint16, noop map[uint16]bool, entries map[strin
 				addDiagnostic(diagnostics, positions, path+"."+sourceName, "undefined action %q", destinationName[1:])
 				continue
 			}
-			source, ok := virtualKey(unescapedSourceName)
+			source, ok := scanCode(unescapedSourceName)
 			if !ok {
 				addDiagnostic(diagnostics, positions, path+"."+sourceName, "unsupported remap source key %q", unescapedSourceName)
 				continue
@@ -423,12 +423,12 @@ func mergeRemap(remap map[uint16]uint16, noop map[uint16]bool, entries map[strin
 			addDiagnostic(diagnostics, positions, path+"."+sourceName, "invalid remap destination key: %v", err)
 			continue
 		}
-		source, ok := virtualKey(unescapedSourceName)
+		source, ok := scanCode(unescapedSourceName)
 		if !ok {
 			addDiagnostic(diagnostics, positions, path+"."+sourceName, "unsupported remap source key %q", unescapedSourceName)
 			continue
 		}
-		destination, ok := virtualKey(destinationName)
+		destination, ok := scanCode(destinationName)
 		if !ok {
 			addDiagnostic(diagnostics, positions, path+"."+sourceName, "unsupported remap destination key %q", destinationName)
 			continue
@@ -533,7 +533,7 @@ func resolveLayers(raw map[string]any, remap map[uint16]uint16, noop map[uint16]
 	}
 
 	for index, sourceToken := range source {
-		sourceKey, sourceOK := virtualKey(sourceToken.value)
+		sourceKey, sourceOK := scanCode(sourceToken.value)
 		if !sourceOK {
 			addDiagnostic(diagnostics, positions, fmt.Sprintf("src.def[%d]", index), "unsupported source layer key %q at position %d", sourceToken.value, index)
 			continue
@@ -545,7 +545,7 @@ func resolveLayers(raw map[string]any, remap map[uint16]uint16, noop map[uint16]
 			noop[sourceKey] = true
 			continue
 		}
-		destinationKey, destinationOK := virtualKey(destination[index].value)
+		destinationKey, destinationOK := scanCode(destination[index].value)
 		if !destinationOK {
 			addDiagnostic(diagnostics, positions, fmt.Sprintf("%s.def[%d]", defaultLayer, index), "unsupported default layer key %q at position %d", destination[index].value, index)
 			continue
