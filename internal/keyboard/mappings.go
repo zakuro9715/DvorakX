@@ -159,7 +159,8 @@ func (m *Mappings) lookupStages() ([]MappingStage, bool) {
 }
 
 func stagesFromConfig(loaded config.Config) ([]MappingStage, error) {
-	stages := []MappingStage{remapStage(loaded.Global)}
+	stages := make([]MappingStage, 1, 3)
+	stages[0] = remapStage(loaded.Global)
 	defaultLayer, ok := strings.CutPrefix(loaded.Meta.Default, "&")
 	if !ok || defaultLayer == "" {
 		return stages, nil
