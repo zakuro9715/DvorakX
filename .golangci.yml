@@ -1,5 +1,5 @@
 # Policy: Enable only 'meaningful' linters. Don't use too many linters.
-version: 2
+version: "2"
 linters:
   default: none
   enable:
