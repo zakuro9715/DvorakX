@@ -8,7 +8,7 @@ linters:
     - errcheck
     - errname
     - errorlint
-    # - exhaustive
+    - exhaustive
     # - forbidigo   # Forbid print()
     - gocheckcompilerdirectives
     - gochecknoinits

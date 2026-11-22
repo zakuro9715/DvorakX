@@ -197,6 +197,9 @@ func collectSourcePositions(data []byte) (sourcePositions, error) {
 			}
 		case unstable.KeyValue:
 			recordNodePositions(parser, expression, tablePath, positions, sourceLines)
+		case unstable.Invalid, unstable.Comment, unstable.Key, unstable.Array, unstable.InlineTable,
+			unstable.String, unstable.Bool, unstable.Float, unstable.Integer,
+			unstable.LocalDate, unstable.LocalTime, unstable.LocalDateTime, unstable.DateTime:
 		}
 	}
 	if err := parser.Error(); err != nil {
@@ -244,6 +247,9 @@ func recordValuePositions(parser *unstable.Parser, node *unstable.Node, path str
 			positions[childPath] = nodePosition(parser, keyNode, sourceLines)
 			recordValuePositions(parser, child.Value(), childPath, positions, sourceLines)
 		}
+	case unstable.Invalid, unstable.Comment, unstable.Key, unstable.Table, unstable.ArrayTable,
+		unstable.KeyValue, unstable.String, unstable.Bool, unstable.Float, unstable.Integer,
+		unstable.LocalDate, unstable.LocalTime, unstable.LocalDateTime, unstable.DateTime:
 	}
 }
 
@@ -637,6 +643,7 @@ func mergeRemap(remap map[uint16]uint16, noop map[uint16]bool, sendKeys map[uint
 				continue
 			}
 			switch action.Kind {
+			case noAction:
 			case NoopAction:
 				noop[source] = true
 			case SendKeysAction:
@@ -768,6 +775,7 @@ func resolveLayers(raw map[string]any, remap map[uint16]uint16, noop map[uint16]
 			continue
 		}
 		switch destination[index].action.Kind {
+		case noAction:
 		case NoopAction:
 			noop[sourceKey] = true
 			continue
