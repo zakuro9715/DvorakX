@@ -11,6 +11,8 @@ import (
 
 	"github.com/pelletier/go-toml/v2"
 	"github.com/pelletier/go-toml/v2/unstable"
+
+	"github.com/zakuro9715/DvorakX/internal/keys"
 )
 
 // Config contains the validated configuration file structure.
@@ -129,16 +131,16 @@ func parseSendKeys(value any, path string, positions sourcePositions, diagnostic
 		addDiagnostic(diagnostics, positions, path, "send-keys must contain at least one key")
 		return nil, false
 	}
-	keys := make([]uint16, len(names))
+	resolved := make([]uint16, len(names))
 	for index, name := range names {
-		key, ok := virtualKey(name)
+		key, ok := keys.Lookup(name)
 		if !ok {
 			addDiagnostic(diagnostics, positions, fmt.Sprintf("%s[%d]", path, index), "unsupported send-keys key %q", name)
 			return nil, false
 		}
-		keys[index] = key
+		resolved[index] = key
 	}
-	return keys, true
+	return resolved, true
 }
 
 func resolveAction(value string, actions map[string]ActionSpec) (ActionSpec, bool) {
@@ -485,15 +487,15 @@ func parseSendKeysForCapture(value any) ([]uint16, bool) {
 	if len(names) == 0 {
 		return nil, false
 	}
-	keys := make([]uint16, len(names))
+	resolved := make([]uint16, len(names))
 	for index, name := range names {
-		key, ok := virtualKey(name)
+		key, ok := keys.Lookup(name)
 		if !ok {
 			return nil, false
 		}
-		keys[index] = key
+		resolved[index] = key
 	}
-	return keys, true
+	return resolved, true
 }
 
 func captureRemaps(value any) []map[string]string {
@@ -630,7 +632,7 @@ func mergeRemap(remap map[uint16]uint16, noop map[uint16]bool, sendKeys map[uint
 				addDiagnostic(diagnostics, positions, path+"."+sourceName, "undefined action %q", destinationName[1:])
 				continue
 			}
-			source, ok := virtualKey(unescapedSourceName)
+			source, ok := keys.Lookup(unescapedSourceName)
 			if !ok {
 				addDiagnostic(diagnostics, positions, path+"."+sourceName, "unsupported remap source key %q", unescapedSourceName)
 				continue
@@ -648,12 +650,12 @@ func mergeRemap(remap map[uint16]uint16, noop map[uint16]bool, sendKeys map[uint
 			addDiagnostic(diagnostics, positions, path+"."+sourceName, "invalid remap destination key: %v", err)
 			continue
 		}
-		source, ok := virtualKey(unescapedSourceName)
+		source, ok := keys.Lookup(unescapedSourceName)
 		if !ok {
 			addDiagnostic(diagnostics, positions, path+"."+sourceName, "unsupported remap source key %q", unescapedSourceName)
 			continue
 		}
-		destination, ok := virtualKey(destinationName)
+		destination, ok := keys.Lookup(destinationName)
 		if !ok {
 			addDiagnostic(diagnostics, positions, path+"."+sourceName, "unsupported remap destination key %q", destinationName)
 			continue
@@ -758,7 +760,7 @@ func resolveLayers(raw map[string]any, remap map[uint16]uint16, noop map[uint16]
 	}
 
 	for index, sourceToken := range source {
-		sourceKey, sourceOK := virtualKey(sourceToken.value)
+		sourceKey, sourceOK := keys.Lookup(sourceToken.value)
 		if !sourceOK {
 			addDiagnostic(diagnostics, positions, fmt.Sprintf("src.def[%d]", index), "unsupported source layer key %q at position %d", sourceToken.value, index)
 			continue
@@ -774,7 +776,7 @@ func resolveLayers(raw map[string]any, remap map[uint16]uint16, noop map[uint16]
 			sendKeys[sourceKey] = append([]uint16(nil), destination[index].action.Keys...)
 			continue
 		}
-		destinationKey, destinationOK := virtualKey(destination[index].value)
+		destinationKey, destinationOK := keys.Lookup(destination[index].value)
 		if !destinationOK {
 			addDiagnostic(diagnostics, positions, fmt.Sprintf("%s.def[%d]", defaultLayer, index), "unsupported default layer key %q at position %d", destination[index].value, index)
 			continue

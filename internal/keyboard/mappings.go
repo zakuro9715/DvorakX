@@ -7,6 +7,7 @@ import (
 	"sync/atomic"
 
 	"github.com/zakuro9715/DvorakX/internal/config"
+	"github.com/zakuro9715/DvorakX/internal/keys"
 )
 
 // Mappings provides lock-free replacement of the active key map.
@@ -181,7 +182,7 @@ func stagesFromConfig(loaded config.Config) ([]MappingStage, error) {
 		if err != nil {
 			return nil, fmt.Errorf("invalid source layer key %q: %w", sourceName, err)
 		}
-		sourceKey, ok := config.KeyCode(sourceName)
+		sourceKey, ok := keys.Lookup(sourceName)
 		if !ok {
 			return nil, fmt.Errorf("unsupported source layer key %q", sourceName)
 		}
@@ -198,7 +199,7 @@ func stagesFromConfig(loaded config.Config) ([]MappingStage, error) {
 			definition.Mappings[sourceKey] = StageMapping{Passthrough: true}
 			continue
 		}
-		destinationKey, ok := config.KeyCode(target)
+		destinationKey, ok := keys.Lookup(target)
 		if !ok {
 			return nil, fmt.Errorf("unsupported default layer key %q", target)
 		}
@@ -217,7 +218,7 @@ func remapStage(layer config.LayerConfig) MappingStage {
 			if sourceErr != nil || destinationErr != nil {
 				continue
 			}
-			source, ok := config.KeyCode(sourceName)
+			source, ok := keys.Lookup(sourceName)
 			if !ok {
 				continue
 			}
@@ -225,7 +226,7 @@ func remapStage(layer config.LayerConfig) MappingStage {
 				stage.Mappings[source] = actionMapping(action)
 				continue
 			}
-			if destination, ok := config.KeyCode(destinationName); ok {
+			if destination, ok := keys.Lookup(destinationName); ok {
 				stage.Mappings[source] = StageMapping{Destination: destination}
 			}
 		}

@@ -14,37 +14,16 @@ func TestAllBehavior(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadFile(all.toml) error = %v", err)
 	}
-	remap, noop, sendKeys := loaded.ResolveMappings()
-	if want := map[uint16]uint16{
-		0x41: 0x42, // A -> B
-		0x43: 0x43, // C -> C
-		0x44: 0x44, // D -> D
-		0x14: 0x11, // Caps Lock -> Ctrl
-		0x5B: 0x12, // Left Windows -> Alt
-	}; !reflect.DeepEqual(remap, want) {
-		t.Errorf("remap = %#v, want %#v", remap, want)
-	}
-	if want := map[uint16]bool{
-		0x42: true, // B
-		0x58: true, // X
-	}; !reflect.DeepEqual(noop, want) {
-		t.Errorf("noop = %#v, want %#v", noop, want)
-	}
-	if want := map[uint16][]uint16{
-		0x59: {0x11, 0x43, 0x56}, // Y -> Ctrl+C+V
-		0x5a: {0x11, 0x43, 0x56}, // Y -> Ctrl+C+V
-	}; !reflect.DeepEqual(sendKeys, want) {
-		t.Errorf("sendKeys = %#v, want %#v", sendKeys, want)
-	}
 	if got := loaded.Layers["alternate"].Definition.Text; got != "#src" {
 		t.Errorf("alternate definition = %q, want #src", got)
 	}
 
 	output := newRecordingOutput()
-	simulated := keyboard.NewSimulatedKeyboard(
-		keyboard.NewMappingsWithActions(remap, noop, sendKeys),
-		output,
-	)
+	mappings, err := keyboard.NewMappingsFromConfig(loaded)
+	if err != nil {
+		t.Fatalf("NewMappingsFromConfig() error = %v", err)
+	}
+	simulated := keyboard.NewSimulatedKeyboard(mappings, output)
 
 	// This covers layer remaps, direct global remaps, and the send-keys action.
 	for _, event := range []keyboard.Event{

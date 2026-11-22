@@ -15,13 +15,13 @@ import (
 	"testing"
 	"time"
 	"unsafe"
+
+	"github.com/zakuro9715/DvorakX/internal/keys"
 )
 
 const (
 	inputKeyboard = 1
 	keyEventKeyUp = 0x0002
-
-	vkShift = 0x10
 
 	wsOverlappedWindow = 0x00CF0000
 	wsVisible          = 0x10000000
@@ -124,12 +124,12 @@ func (environment *Environment) assertKey(source, want string, shifted bool) {
 		environment.t.Fatalf("clear receiver text: %v", err)
 	}
 	if shifted {
-		sendKey(environment.t, vkShift, false)
+		sendKey(environment.t, keys.VKShift, false)
 	}
 	sendKey(environment.t, virtualKey, false)
 	sendKey(environment.t, virtualKey, true)
 	if shifted {
-		sendKey(environment.t, vkShift, true)
+		sendKey(environment.t, keys.VKShift, true)
 	}
 
 	deadline := time.Now().Add(2 * time.Second)
@@ -290,18 +290,11 @@ func windowText(t *testing.T, window uintptr) string {
 
 func virtualKey(t *testing.T, name string) uint16 {
 	t.Helper()
-	if len(name) != 1 {
-		t.Fatalf("source key %q is not a single ASCII letter or digit", name)
+	key, ok := keys.Lookup(name)
+	if !ok {
+		t.Fatalf("unknown source key %q", name)
 	}
-	switch {
-	case name[0] >= 'a' && name[0] <= 'z':
-		return 0x41 + uint16(name[0]-'a')
-	case name[0] >= '0' && name[0] <= '9':
-		return 0x30 + uint16(name[0]-'0')
-	default:
-		t.Fatalf("source key %q is not a single ASCII letter or digit", name)
-		return 0
-	}
+	return key
 }
 
 func repositoryRoot(t *testing.T) string {
