@@ -12,10 +12,10 @@ linters:
     # - forbidigo   # Forbid print()
     - gocheckcompilerdirectives
     - gochecknoinits
-    # - gocognit
+    - gocognit
     # - goconst
     # - gocritic
-    # - gocyclo
+    - gocyclo
     # - godoclint
     # - goprintffuncname
     - govet

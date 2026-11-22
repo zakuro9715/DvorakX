@@ -673,25 +673,7 @@ func mergeRemap(remap map[uint16]uint16, noop map[uint16]bool, sendKeys map[uint
 func resolveLayers(raw map[string]any, remap map[uint16]uint16, noop map[uint16]bool, sendKeys map[uint16][]uint16, positions sourcePositions, diagnostics *DiagnosticsError) bool {
 	_, hasMeta := raw["meta"]
 	sourceValue, hasSource := raw["src"]
-	var layerNames []string
-	for name := range raw {
-		switch name {
-		case "global", "meta", "src":
-		default:
-			layerNames = append(layerNames, name)
-		}
-	}
-	sort.SliceStable(layerNames, func(left, right int) bool {
-		leftPosition := positions[layerNames[left]]
-		rightPosition := positions[layerNames[right]]
-		if leftPosition.line != rightPosition.line {
-			return leftPosition.line < rightPosition.line
-		}
-		if leftPosition.column != rightPosition.column {
-			return leftPosition.column < rightPosition.column
-		}
-		return layerNames[left] < layerNames[right]
-	})
+	layerNames := sortedLayerNames(raw, positions)
 	if !hasMeta && !hasSource {
 		if len(layerNames) != 0 {
 			for _, layerName := range layerNames {
@@ -735,11 +717,6 @@ func resolveLayers(raw map[string]any, remap map[uint16]uint16, noop map[uint16]
 		return false
 	}
 
-	sourceActions := parseActions(nil, "src.actions", positions, diagnostics)
-	if sourceTable, ok := sourceValue.(map[string]any); ok {
-		sourceActions = parseActions(sourceTable["actions"], "src.actions", positions, diagnostics)
-	}
-	source, sourceOK := parseDefinition(sourceValue, "[src]", sourceActions, positions, diagnostics)
 	layerValue, ok := raw[defaultLayer]
 	if !ok {
 		addDiagnostic(diagnostics, positions, "meta.default", "[meta].default references undefined layer %q", defaultLayer)
@@ -750,6 +727,39 @@ func resolveLayers(raw map[string]any, remap map[uint16]uint16, noop map[uint16]
 			parseLayer(raw[layerName], layerName, positions, diagnostics)
 		}
 	}
+	return resolveDefaultLayer(
+		sourceValue, layerValue, defaultLayer, remap, noop, sendKeys,
+		positions, diagnostics,
+	)
+}
+
+func sortedLayerNames(raw map[string]any, positions sourcePositions) []string {
+	layerNames := make([]string, 0, len(raw))
+	for name := range raw {
+		if name != "global" && name != "meta" && name != "src" {
+			layerNames = append(layerNames, name)
+		}
+	}
+	sort.SliceStable(layerNames, func(left, right int) bool {
+		leftPosition := positions[layerNames[left]]
+		rightPosition := positions[layerNames[right]]
+		if leftPosition.line != rightPosition.line {
+			return leftPosition.line < rightPosition.line
+		}
+		if leftPosition.column != rightPosition.column {
+			return leftPosition.column < rightPosition.column
+		}
+		return layerNames[left] < layerNames[right]
+	})
+	return layerNames
+}
+
+func resolveDefaultLayer(sourceValue, layerValue any, defaultLayer string, remap map[uint16]uint16, noop map[uint16]bool, sendKeys map[uint16][]uint16, positions sourcePositions, diagnostics *DiagnosticsError) bool {
+	sourceActions := parseActions(nil, "src.actions", positions, diagnostics)
+	if sourceTable, ok := sourceValue.(map[string]any); ok {
+		sourceActions = parseActions(sourceTable["actions"], "src.actions", positions, diagnostics)
+	}
+	source, sourceOK := parseDefinition(sourceValue, "[src]", sourceActions, positions, diagnostics)
 	layerTable, _ := layerValue.(map[string]any)
 	actions := parseActions(layerTable["actions"], defaultLayer+".actions", positions, diagnostics)
 	layerRemap, layerNoop, layerSendKeys := parseLayerRemaps(layerTable, defaultLayer, actions, positions, diagnostics)
