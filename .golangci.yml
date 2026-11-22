@@ -30,7 +30,6 @@ linters:
     - nestif
     - nilnesserr
     - nolintlint  # Report incorrect usage of nolint directives
-    # - paralelltest
     - perfsprint    #Checks that fmt.Sprintf can be replaced with a faster alternative
     - prealloc      # Detect slice declarations that can be preallocated
     # - revive           # Drop-in replacement of golint
