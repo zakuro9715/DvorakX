@@ -179,7 +179,7 @@ func ResolveConfigPath(explicitPath, executablePath string) (string, error) {
 		return filepath.Clean(explicitPath), nil
 	}
 	if executablePath == "" {
-		return "", fmt.Errorf("resolve default config path: executable path is empty")
+		return "", errors.New("resolve default config path: executable path is empty")
 	}
 	return filepath.Join(filepath.Dir(executablePath), "config.toml"), nil
 }
@@ -937,10 +937,10 @@ func splitDefinition(definition string) ([]definitionToken, error) {
 		case escaped:
 			switch character {
 			case '{':
-				return nil, fmt.Errorf("nested { is not allowed")
+				return nil, errors.New("nested { is not allowed")
 			case '}':
 				if token.Len() == 0 {
-					return nil, fmt.Errorf("{} is not allowed")
+					return nil, errors.New("{} is not allowed")
 				}
 				tokens = append(tokens, definitionToken{value: token.String(), escaped: true})
 				token.Reset()
@@ -950,11 +950,11 @@ func splitDefinition(definition string) ([]definitionToken, error) {
 			}
 		case character == '{':
 			if token.Len() != 0 {
-				return nil, fmt.Errorf("{ must start a key definition")
+				return nil, errors.New("{ must start a key definition")
 			}
 			escaped = true
 		case character == '}':
-			return nil, fmt.Errorf("unexpected }")
+			return nil, errors.New("unexpected }")
 		case unicode.IsSpace(character) || character == ',' || character == '|':
 			if token.Len() != 0 {
 				tokens = append(tokens, definitionToken{value: token.String()})
@@ -965,7 +965,7 @@ func splitDefinition(definition string) ([]definitionToken, error) {
 		}
 	}
 	if escaped {
-		return nil, fmt.Errorf("unclosed {")
+		return nil, errors.New("unclosed {")
 	}
 	if token.Len() != 0 {
 		tokens = append(tokens, definitionToken{value: token.String()})
