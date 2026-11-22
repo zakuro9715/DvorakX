@@ -1,7 +1,5 @@
 package keyboard
 
-import "github.com/zakuro9715/DvorakX/internal/config"
-
 // Event is an OS-independent virtual key event.
 type Event struct {
 	VirtualKey uint16
@@ -84,7 +82,7 @@ func (k *SimulatedKeyboard) mapping(event Event) (Mapping, bool) {
 	return mapping, true
 }
 
-func resolveStages(key uint16, stages []config.MappingStage) (Mapping, bool) {
+func resolveStages(key uint16, stages []MappingStage) (Mapping, bool) {
 	current := key
 	matched := false
 	for _, stage := range stages {

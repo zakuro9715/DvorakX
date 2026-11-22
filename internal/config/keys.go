@@ -81,9 +81,11 @@ func virtualKey(name string) (uint16, bool) {
 	if key, ok := namedVirtualKeys[name]; ok {
 		return key, true
 	}
+
 	if len(name) != 1 {
 		return 0, false
 	}
+
 	if name[0] >= '0' && name[0] <= '9' {
 		return vkNum0 + uint16(name[0]-'0'), true
 	}
@@ -91,4 +93,9 @@ func virtualKey(name string) (uint16, bool) {
 		return vkA + uint16(name[0]-'a'), true
 	}
 	return 0, false
+}
+
+// KeyCode returns the virtual-key code for a configured key name.
+func KeyCode(name string) (uint16, bool) {
+	return virtualKey(name)
 }

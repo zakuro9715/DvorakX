@@ -19,28 +19,6 @@ type Config struct {
 	Global LayerConfig
 	Source LayerConfig
 	Layers map[string]LayerConfig
-
-	// Remap, Noop, and SendKeys are the resolved mappings consumed by the
-	// keyboard backend.
-	Remap    map[uint16]uint16
-	Noop     map[uint16]bool
-	SendKeys map[uint16][]uint16
-
-	// Stages preserves the ordered transformations consumed by keyboard.
-	Stages []MappingStage
-}
-
-// MappingStage is one ordered step in keyboard processing.
-type MappingStage struct {
-	Mappings map[uint16]StageMapping
-}
-
-// StageMapping describes a transformation in one mapping stage.
-type StageMapping struct {
-	Destination uint16
-	Noop        bool
-	SendKeys    []uint16
-	Passthrough bool
 }
 
 // MetaConfig contains settings from the [meta] table.
@@ -57,8 +35,9 @@ type LayerConfig struct {
 
 // Definition preserves the source form of a layer definition.
 type Definition struct {
-	Text string
-	Keys []string
+	Text   string
+	Keys   []string
+	Tokens []string
 }
 
 type definitionToken struct {
@@ -404,13 +383,10 @@ func Parse(data []byte) (Config, error) {
 		return Config{}, diagnostics
 	}
 	config := Config{
-		Meta:     captureMeta(raw),
-		Global:   captureLayer(raw["global"]),
-		Source:   captureLayer(raw["src"]),
-		Layers:   make(map[string]LayerConfig),
-		Remap:    remap,
-		Noop:     noop,
-		SendKeys: sendKeys,
+		Meta:   captureMeta(raw),
+		Global: captureLayer(raw["global"]),
+		Source: captureLayer(raw["src"]),
+		Layers: make(map[string]LayerConfig),
 	}
 	for name, value := range raw {
 		if name == "meta" || name == "global" || name == "src" {
@@ -418,87 +394,7 @@ func Parse(data []byte) (Config, error) {
 		}
 		config.Layers[name] = captureLayer(value)
 	}
-	config.Stages = captureStages(raw)
 	return config, nil
-}
-
-func captureStages(raw map[string]any) []MappingStage {
-	globalRemap, globalNoop, globalSendKeys := parseGlobal(raw, nil, nil)
-	stages := []MappingStage{stageFromMaps(globalRemap, globalNoop, globalSendKeys)}
-
-	meta, hasMeta := raw["meta"].(map[string]any)
-	sourceValue, hasSource := raw["src"]
-	if !hasMeta || !hasSource {
-		return stages
-	}
-	defaultValue, _ := meta["default"].(string)
-	defaultLayer, ok := strings.CutPrefix(defaultValue, "&")
-	if !ok || defaultLayer == "" {
-		return stages
-	}
-	layerValue, ok := raw[defaultLayer]
-	if !ok {
-		return stages
-	}
-	sourceActions := map[string]ActionSpec{}
-	if sourceTable, ok := sourceValue.(map[string]any); ok {
-		sourceActions = parseActions(sourceTable["actions"], "src.actions", nil, nil)
-	}
-	destinationTable, _ := layerValue.(map[string]any)
-	destinationActions := parseActions(destinationTable["actions"], defaultLayer+".actions", nil, nil)
-	source, sourceOK := parseDefinition(sourceValue, "[src]", sourceActions, nil, nil)
-	destination, destinationOK := parseDefinition(layerValue, "["+defaultLayer+"]", destinationActions, nil, nil)
-	if !sourceOK || !destinationOK || len(destination) == 1 && destination[0].value == "#src" {
-		if sourceOK && len(destination) == 1 && destination[0].value == "#src" {
-			destination = source
-		} else {
-			return stages
-		}
-	}
-	if len(source) != len(destination) {
-		return stages
-	}
-	definition := MappingStage{Mappings: make(map[uint16]StageMapping, len(source))}
-	for index, sourceToken := range source {
-		sourceKey, ok := virtualKey(sourceToken.value)
-		if !ok {
-			continue
-		}
-		target := destination[index]
-		switch target.action.Kind {
-		case NoopAction:
-			definition.Mappings[sourceKey] = StageMapping{Noop: true}
-		case SendKeysAction:
-			definition.Mappings[sourceKey] = StageMapping{SendKeys: append([]uint16(nil), target.action.Keys...)}
-		default:
-			if !target.escaped && target.value == "_" {
-				definition.Mappings[sourceKey] = StageMapping{Passthrough: true}
-				continue
-			}
-			destinationKey, ok := virtualKey(target.value)
-			if ok {
-				definition.Mappings[sourceKey] = StageMapping{Destination: destinationKey}
-			}
-		}
-	}
-	stages = append(stages, definition)
-	layerRemap, layerNoop, layerSendKeys := parseLayerRemaps(destinationTable, defaultLayer, destinationActions, nil, nil)
-	stages = append(stages, stageFromMaps(layerRemap, layerNoop, layerSendKeys))
-	return stages
-}
-
-func stageFromMaps(remap map[uint16]uint16, noop map[uint16]bool, sendKeys map[uint16][]uint16) MappingStage {
-	stage := MappingStage{Mappings: make(map[uint16]StageMapping, len(remap)+len(noop)+len(sendKeys))}
-	for source, destination := range remap {
-		stage.Mappings[source] = StageMapping{Destination: destination}
-	}
-	for source := range noop {
-		stage.Mappings[source] = StageMapping{Noop: true}
-	}
-	for source, keys := range sendKeys {
-		stage.Mappings[source] = StageMapping{SendKeys: append([]uint16(nil), keys...)}
-	}
-	return stage
 }
 
 func captureMeta(raw map[string]any) MetaConfig {
@@ -525,7 +421,21 @@ func captureLayer(value any) LayerConfig {
 func captureDefinition(value any) Definition {
 	switch definition := value.(type) {
 	case string:
-		return Definition{Text: definition}
+		if strings.TrimSpace(definition) == "#src" {
+			return Definition{Text: definition, Tokens: []string{"#src"}}
+		}
+		parsed, err := splitDefinition(definition)
+		tokens := strings.FieldsFunc(definition, func(r rune) bool {
+			return unicode.IsSpace(r) || r == '|' || r == ','
+		})
+		if err != nil {
+		} else {
+			tokens = make([]string, len(parsed))
+			for index, token := range parsed {
+				tokens[index] = token.value
+			}
+		}
+		return Definition{Text: definition, Tokens: tokens}
 	case []any:
 		keys := make([]string, 0, len(definition))
 		for _, value := range definition {
@@ -533,7 +443,7 @@ func captureDefinition(value any) Definition {
 				keys = append(keys, key)
 			}
 		}
-		return Definition{Keys: keys}
+		return Definition{Keys: keys, Tokens: append([]string(nil), keys...)}
 	default:
 		return Definition{}
 	}
@@ -609,23 +519,6 @@ func captureRemaps(value any) []map[string]string {
 		remaps = append(remaps, entries)
 	}
 	return remaps
-}
-
-// ResolveMappings returns the mappings consumed by the keyboard backend.
-func (c Config) ResolveMappings() (map[uint16]uint16, map[uint16]bool, map[uint16][]uint16) {
-	remap := make(map[uint16]uint16, len(c.Remap))
-	for source, destination := range c.Remap {
-		remap[source] = destination
-	}
-	noop := make(map[uint16]bool, len(c.Noop))
-	for source, enabled := range c.Noop {
-		noop[source] = enabled
-	}
-	sendKeys := make(map[uint16][]uint16, len(c.SendKeys))
-	for source, keys := range c.SendKeys {
-		sendKeys[source] = append([]uint16(nil), keys...)
-	}
-	return remap, noop, sendKeys
 }
 
 func addDiagnostic(e *Diagnostics, positions sourcePositions, path, format string, args ...any) {
@@ -1070,4 +963,9 @@ func unescapeKeyName(name string) (string, error) {
 		return "", fmt.Errorf("%q contains invalid braces", name)
 	}
 	return unescaped, nil
+}
+
+// UnescapeKeyName removes the explicit braces used for punctuation key names.
+func UnescapeKeyName(name string) (string, error) {
+	return unescapeKeyName(name)
 }

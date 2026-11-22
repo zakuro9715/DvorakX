@@ -171,7 +171,11 @@ remaps = { f = "x" }
 	}
 
 	output := newRecordingOutput()
-	keyboard := NewSimulatedKeyboard(NewMappingsFromStages(loaded.Stages), output)
+	mappings, err := NewMappingsFromConfig(loaded)
+	if err != nil {
+		t.Fatalf("NewMappingsFromConfig() error = %v", err)
+	}
+	keyboard := NewSimulatedKeyboard(mappings, output)
 	for _, key := range []uint16{0x41, 0x42} { // A and B
 		if handled, err := keyboard.Handle(Event{VirtualKey: key}); !handled || err != nil {
 			t.Fatalf("handle key down 0x%X = (%t, %v), want (true, nil)", key, handled, err)

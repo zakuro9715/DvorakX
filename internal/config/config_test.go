@@ -18,17 +18,8 @@ remaps = [
 	if err != nil {
 		t.Fatalf("Parse() error = %v", err)
 	}
-	if len(config.Remap) != 3 {
-		t.Fatalf("len(Remap) = %d, want 3", len(config.Remap))
-	}
-	if got := config.Remap[vkCapital]; got != vkControl {
-		t.Errorf("caps remap = %#x, want %#x", got, vkControl)
-	}
-	if got := config.Remap[vkA]; got != vkA+2 {
-		t.Errorf("a remap = %#x, want %#x", got, vkA+2)
-	}
-	if got := config.Remap[vkA+1]; got != vkA+3 {
-		t.Errorf("b remap = %#x, want %#x", got, vkA+3)
+	if len(config.Global.Remaps) != 2 || config.Global.Remaps[1]["a"] != "c" {
+		t.Errorf("Global.Remaps = %#v, want ordered raw remap tables", config.Global.Remaps)
 	}
 }
 
@@ -88,14 +79,8 @@ a = "b"
 	if err != nil {
 		t.Fatalf("Parse() error = %v", err)
 	}
-	if len(config.Remap) != 2 {
-		t.Fatalf("len(Remap) = %d, want 2", len(config.Remap))
-	}
-	if got := config.Remap[vkCapital]; got != vkControl {
-		t.Errorf("caps remap = %#x, want %#x", got, vkControl)
-	}
-	if got := config.Remap[vkA]; got != vkA+1 {
-		t.Errorf("a remap = %#x, want %#x", got, vkA+1)
+	if len(config.Global.Remaps) != 1 || config.Global.Remaps[0]["a"] != "b" {
+		t.Errorf("Global.Remaps = %#v, want raw remap table", config.Global.Remaps)
 	}
 }
 
@@ -110,8 +95,8 @@ disable = { noop = [] }
 	if err != nil {
 		t.Fatalf("Parse() error = %v", err)
 	}
-	if !config.Noop[vkA+23] {
-		t.Fatalf("Noop[x] = false, want true")
+	if got := config.Global.Remaps[0]["x"]; got != "@disable" {
+		t.Fatalf("global remap x = %q, want @disable", got)
 	}
 }
 
@@ -137,20 +122,8 @@ remaps = [
 	if err != nil {
 		t.Fatalf("Parse() error = %v", err)
 	}
-	if got := config.Remap[vkA]; got != vkA+3 {
-		t.Errorf("a remap = %#x, want %#x", got, vkA+3)
-	}
-	if got := config.Remap[vkA+1]; got != vkA+2 {
-		t.Errorf("b remap = %#x, want %#x", got, vkA+2)
-	}
-	if got := config.Remap[vkA+2]; got != vkA {
-		t.Errorf("c remap = %#x, want %#x", got, vkA)
-	}
-	if got := config.Remap[vkA+23]; got != vkZ {
-		t.Errorf("x remap = %#x, want %#x", got, vkZ)
-	}
-	if got := config.Remap[vkZ]; got != vkA+23 {
-		t.Errorf("z remap = %#x, want %#x", got, vkA+23)
+	if len(config.Layers["base"].Remaps) != 3 {
+		t.Fatalf("layer remaps = %#v, want three ordered definitions", config.Layers["base"].Remaps)
 	}
 }
 
@@ -174,8 +147,8 @@ disable = { noop = [] }
 	if err != nil {
 		t.Fatalf("Parse() error = %v", err)
 	}
-	if !config.Noop[vkZ] {
-		t.Fatal("Noop[z] = false, want true")
+	if got := config.Layers["base"].Remaps[0]["z"]; got != "@disable" {
+		t.Fatalf("layer remap z = %q, want @disable", got)
 	}
 }
 
@@ -222,8 +195,8 @@ disable = { noop = [] }
 	if err != nil {
 		t.Fatalf("Parse() error = %v", err)
 	}
-	if !config.Noop[vkCapital] {
-		t.Fatalf("Noop[caps] = false, want true")
+	if got := config.Global.Remaps[0]["caps"]; got != "@disable" {
+		t.Fatalf("global remap caps = %q, want @disable", got)
 	}
 }
 
@@ -239,11 +212,11 @@ paste = { send-keys = "ctrl v" }
 	if err != nil {
 		t.Fatalf("Parse() error = %v", err)
 	}
-	if got := config.SendKeys[vkA+23]; !reflect.DeepEqual(got, []uint16{vkControl, vkA + 2}) {
-		t.Errorf("SendKeys[x] = %#v, want ctrl+c", got)
+	if got := config.Global.Remaps[0]["x"]; got != "@copy" {
+		t.Errorf("global remap x = %q, want @copy", got)
 	}
-	if got := config.SendKeys[vkA+24]; !reflect.DeepEqual(got, []uint16{vkControl, vkA + 21}) {
-		t.Errorf("SendKeys[y] = %#v, want ctrl+v", got)
+	if got := config.Global.Actions["paste"].Kind; got != SendKeysAction {
+		t.Errorf("paste action kind = %v, want send-keys", got)
 	}
 }
 
@@ -296,8 +269,8 @@ disable = { noop = [] }
 	if err != nil {
 		t.Fatalf("Parse() error = %v", err)
 	}
-	if !config.Noop[vkA] {
-		t.Fatalf("Noop[a] = false, want true")
+	if got := config.Layers["base"].Definition.Keys[0]; got != "@disable" {
+		t.Fatalf("layer definition = %q, want @disable", got)
 	}
 }
 
@@ -318,8 +291,8 @@ copy = { send-keys = "ctrl c" }
 	if err != nil {
 		t.Fatalf("Parse() error = %v", err)
 	}
-	if got := config.SendKeys[vkA]; !reflect.DeepEqual(got, []uint16{vkControl, vkA + 2}) {
-		t.Errorf("SendKeys[a] = %#v, want ctrl+c", got)
+	if got := config.Layers["base"].Definition.Keys[0]; got != "@copy" {
+		t.Errorf("layer definition = %q, want @copy", got)
 	}
 }
 
@@ -483,14 +456,8 @@ b | _ , a
 	if err != nil {
 		t.Fatalf("Parse() error = %v", err)
 	}
-	if got := config.Remap[vkA]; got != vkA+2 {
-		t.Errorf("a remap = %#x, want %#x", got, vkA+2)
-	}
-	if _, ok := config.Remap[vkA+1]; ok {
-		t.Error("b remap exists, want placeholder to leave it unmapped")
-	}
-	if got := config.Remap[vkA+2]; got != vkA {
-		t.Errorf("c remap = %#x, want %#x", got, vkA)
+	if got := config.Layers["swap"].Definition.Tokens; !reflect.DeepEqual(got, []string{"b", "_", "a"}) {
+		t.Errorf("swap definition tokens = %#v, want [b _ a]", got)
 	}
 }
 
@@ -508,11 +475,8 @@ def = "#src"
 	if err != nil {
 		t.Fatalf("Parse() error = %v", err)
 	}
-	if got := config.Remap[vkA]; got != vkA {
-		t.Errorf("a remap = %#x, want %#x", got, vkA)
-	}
-	if got := config.Remap[vkA+1]; got != vkA+1 {
-		t.Errorf("b remap = %#x, want %#x", got, vkA+1)
+	if got := config.Layers["qwerty"].Definition.Tokens; !reflect.DeepEqual(got, []string{"#src"}) {
+		t.Errorf("qwerty definition tokens = %#v, want [#src]", got)
 	}
 }
 
@@ -560,17 +524,8 @@ def = "{,}|{|}|{'}"
 	if err != nil {
 		t.Fatalf("Parse() error = %v", err)
 	}
-	if got := config.Remap[vkA]; got != vkOemComma {
-		t.Errorf("a remap = %#x, want %#x", got, vkOemComma)
-	}
-	if got := config.Remap[vkA+1]; got != vkOem5 {
-		t.Errorf("b remap = %#x, want %#x", got, vkOem5)
-	}
-	if got := config.Remap[vkA+2]; got != vkOem7 {
-		t.Errorf("c remap = %#x, want %#x", got, vkOem7)
-	}
-	if got := config.Remap[vkOemComma]; got != vkOem5 {
-		t.Errorf("comma remap = %#x, want %#x", got, vkOem5)
+	if got := config.Layers["symbols"].Definition.Tokens; !reflect.DeepEqual(got, []string{",", "|", "'"}) {
+		t.Errorf("symbols definition tokens = %#v, want escaped key tokens", got)
 	}
 }
 
