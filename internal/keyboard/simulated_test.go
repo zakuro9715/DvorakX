@@ -1,158 +1,122 @@
-package keyboard
+package keyboard_test
 
 import (
 	"errors"
-	"reflect"
 	"testing"
 
-	"github.com/zakuro9715/DvorakX/internal/config"
+	"github.com/zakuro9715/DvorakX/internal/keyboard"
+	"github.com/zakuro9715/DvorakX/testing/env"
 )
 
 func TestSimulatedKeyboardRemapsPressedKeyAfterMappingsReload(t *testing.T) {
 	t.Parallel()
 
-	mappings := NewMappings(map[uint16]uint16{0x41: 0x42}) // A -> B
-	output := newRecordingOutput()
-	keyboard := NewSimulatedKeyboard(mappings, output)
+	mappings := keyboard.NewMappings(map[uint16]uint16{0x41: 0x42}) // A -> B
+	output := new(recordingOutput)
+	simulated := keyboard.NewSimulatedKeyboard(mappings, output)
 
-	// A pressed key keeps its original destination even after mappings reload.
-	if handled, err := keyboard.Handle(Event{VirtualKey: 0x41}); !handled || err != nil { // A
+	// A pressed key keeps its original destination after the mapping reload.
+	if handled, err := simulated.Handle(keyboard.Event{VirtualKey: 0x41}); !handled || err != nil { // A
 		t.Fatalf("handle key down = (%t, %v), want (true, nil)", handled, err)
 	}
-	mappings.Replace(map[uint16]uint16{0x41: 0x43}) // A -> C
-	// The release must use the destination selected at key-down time.
-	if handled, err := keyboard.Handle(Event{VirtualKey: 0x41, KeyUp: true}); !handled || err != nil { // A
+	mappings.Replace(map[uint16]uint16{0x41: 0x43})                                                              // A -> C
+	if handled, err := simulated.Handle(keyboard.Event{VirtualKey: 0x41, KeyUp: true}); !handled || err != nil { // A
 		t.Fatalf("handle key up = (%t, %v), want (true, nil)", handled, err)
 	}
 
-	want := []Event{{VirtualKey: 0x42}, {VirtualKey: 0x42, KeyUp: true}} // B
-	if !reflect.DeepEqual(output.events, want) {
-		t.Errorf("output events = %#v, want %#v", output.events, want)
+	if got, want := output.events, []keyboard.Event{
+		{VirtualKey: 0x42}, {VirtualKey: 0x42, KeyUp: true}, // B
+	}; len(got) != len(want) || got[0] != want[0] || got[1] != want[1] {
+		t.Errorf("output events = %#v, want %#v", got, want)
 	}
 }
 
 func TestSimulatedKeyboardPassesUnmappedEventsThrough(t *testing.T) {
 	t.Parallel()
 
-	output := newRecordingOutput()
-	keyboard := NewSimulatedKeyboard(NewMappings(map[uint16]uint16{0x41: 0x42}), output) // A -> B
-
-	// An unmapped key is left for the operating system and emits no replacement.
-	handled, err := keyboard.Handle(Event{VirtualKey: 0x43}) // C
-	if handled || err != nil {
-		t.Fatalf("handle unmapped key = (%t, %v), want (false, nil)", handled, err)
-	}
-	if len(output.events) != 0 {
-		t.Errorf("output events = %#v, want none", output.events)
-	}
+	env.New(t).
+		Config(`[global]
+remaps = { a = "b" }
+`).
+		Test("c", "c")
 }
 
 func TestSimulatedKeyboardSuppressesNoopEvents(t *testing.T) {
 	t.Parallel()
 
-	output := newRecordingOutput()
-	keyboard := NewSimulatedKeyboard(
-		NewMappingsWithActions(nil, map[uint16]bool{0x41: true}, nil), // A
-		output,
-	)
+	env.New(t).
+		Config(`[global]
+remaps = { a = "@disabled" }
 
-	// A noop consumes both events without sending anything to the output.
-	if handled, err := keyboard.Handle(Event{VirtualKey: 0x41}); !handled || err != nil { // A
-		t.Fatalf("handle noop key down = (%t, %v), want (true, nil)", handled, err)
-	}
-	if handled, err := keyboard.Handle(Event{VirtualKey: 0x41, KeyUp: true}); !handled || err != nil { // A
-		t.Fatalf("handle noop key up = (%t, %v), want (true, nil)", handled, err)
-	}
-	if len(output.events) != 0 {
-		t.Errorf("output events = %#v, want none", output.events)
-	}
+[global.actions]
+disabled = { noop = [] }
+`).
+		Test("a", "")
 }
 
 func TestSimulatedKeyboardSendsChordActionAndConsumesTrigger(t *testing.T) {
 	t.Parallel()
 
-	output := newRecordingOutput()
-	keyboard := NewSimulatedKeyboard(
-		NewMappingsWithActions(nil, nil, map[uint16][]uint16{
-			0x41: {0x11, 0x43}, // A triggers Ctrl+C.
-		}),
-		output,
-	)
+	env.New(t).
+		Config(`[global]
+remaps = { a = "@copy" }
 
-	for _, event := range []Event{
-		{VirtualKey: 0x41},              // A
-		{VirtualKey: 0x41, KeyUp: true}, // A
-	} {
-		if handled, err := keyboard.Handle(event); !handled || err != nil {
-			t.Fatalf("handle %v = (%t, %v), want (true, nil)", event, handled, err)
-		}
-	}
-
-	want := []Event{
-		{VirtualKey: 0x11},              // Ctrl down
-		{VirtualKey: 0x43},              // C down
-		{VirtualKey: 0x43, KeyUp: true}, // C up
-		{VirtualKey: 0x11, KeyUp: true}, // Ctrl up
-	}
-	if !reflect.DeepEqual(output.events, want) {
-		t.Errorf("output events = %#v, want %#v", output.events, want)
-	}
+[global.actions]
+copy = { send-keys = ["ctrl", "c"] }
+`).
+		Test("a", "ctrl:down c ctrl:up")
 }
 
 func TestSimulatedKeyboardPassesThroughWhenSendKeysFails(t *testing.T) {
-	t.Parallel()
-
 	wantErr := errors.New("send event")
 	output := &recordingOutput{err: wantErr}
-	keyboard := NewSimulatedKeyboard(
-		NewMappingsWithActions(nil, nil, map[uint16][]uint16{0x41: {0x11}}), // A triggers Ctrl.
+	simulated := keyboard.NewSimulatedKeyboard(
+		keyboard.NewMappingsWithActions(nil, nil, map[uint16][]uint16{0x41: {0x11}}), // A triggers Ctrl.
 		output,
 	)
 
-	handled, err := keyboard.Handle(Event{VirtualKey: 0x41}) // A
+	handled, err := simulated.Handle(keyboard.Event{VirtualKey: 0x41}) // A
 	if handled || !errors.Is(err, wantErr) {
 		t.Fatalf("handle action = (%t, %v), want (false, %v)", handled, err, wantErr)
 	}
-	if handled, err := keyboard.Handle(Event{VirtualKey: 0x41, KeyUp: true}); handled || err != nil {
+	if handled, err := simulated.Handle(keyboard.Event{VirtualKey: 0x41, KeyUp: true}); handled || err != nil {
 		t.Fatalf("handle failed action release = (%t, %v), want (false, nil)", handled, err)
 	}
 }
 
 func TestSimulatedKeyboardPassesThroughWhenOutputFails(t *testing.T) {
-	t.Parallel()
-
 	wantErr := errors.New("send event")
 	output := &recordingOutput{err: wantErr}
-	keyboard := NewSimulatedKeyboard(NewMappings(map[uint16]uint16{0x41: 0x42}), output) // A -> B
+	simulated := keyboard.NewSimulatedKeyboard(
+		keyboard.NewMappings(map[uint16]uint16{0x41: 0x42}), // A -> B
+		output,
+	)
 
 	// An output failure makes the event unhandled while preserving the error.
-	handled, err := keyboard.Handle(Event{VirtualKey: 0x41}) // A
+	handled, err := simulated.Handle(keyboard.Event{VirtualKey: 0x41}) // A
 	if handled || !errors.Is(err, wantErr) {
 		t.Fatalf("handle key = (%t, %v), want (false, %v)", handled, err, wantErr)
 	}
-	if want := []Event{{VirtualKey: 0x42}}; !reflect.DeepEqual(output.events, want) { // B
-		t.Errorf("output events = %#v, want %#v", output.events, want)
+	if len(output.events) != 1 || output.events[0] != (keyboard.Event{VirtualKey: 0x42}) { // B
+		t.Errorf("output events = %#v, want B down", output.events)
 	}
 }
 
 func TestSimulatedKeyboardPassesThroughReleaseWithoutPress(t *testing.T) {
 	t.Parallel()
 
-	output := newRecordingOutput()
-	keyboard := NewSimulatedKeyboard(NewMappings(map[uint16]uint16{0x41: 0x42}), output) // A -> B
-
-	// A release without a tracked press must pass through unchanged.
-	handled, err := keyboard.Handle(Event{VirtualKey: 0x41, KeyUp: true}) // A
-	if handled || err != nil {
-		t.Fatalf("handle key up = (%t, %v), want (false, nil)", handled, err)
-	}
-	if len(output.events) != 0 {
-		t.Errorf("output events = %#v, want none", output.events)
-	}
+	env.New(t).
+		Config(`[global]
+remaps = { a = "b" }
+`).
+		Test("a:up", "a:up")
 }
 
 func TestSimulatedKeyboardAppliesDefinitionsInOrder(t *testing.T) {
-	loaded, err := config.Parse([]byte(`
+	t.Parallel()
+
+	env.New(t).
+		Config(`
 [global]
 remaps = { "a" = "b" }
 
@@ -165,45 +129,16 @@ def = ["a", "b", "c"]
 [layer]
 def = ["e", "f", "g"]
 remaps = { f = "x" }
-`))
-	if err != nil {
-		t.Fatalf("Parse() error = %v", err)
-	}
-
-	output := newRecordingOutput()
-	mappings, err := NewMappingsFromConfig(loaded)
-	if err != nil {
-		t.Fatalf("NewMappingsFromConfig() error = %v", err)
-	}
-	keyboard := NewSimulatedKeyboard(mappings, output)
-	for _, key := range []uint16{0x41, 0x42} { // A and B
-		if handled, err := keyboard.Handle(Event{VirtualKey: key}); !handled || err != nil {
-			t.Fatalf("handle key down 0x%X = (%t, %v), want (true, nil)", key, handled, err)
-		}
-		if handled, err := keyboard.Handle(Event{VirtualKey: key, KeyUp: true}); !handled || err != nil {
-			t.Fatalf("handle key up 0x%X = (%t, %v), want (true, nil)", key, handled, err)
-		}
-	}
-
-	want := []Event{
-		{VirtualKey: 0x58}, {VirtualKey: 0x58, KeyUp: true}, // X
-		{VirtualKey: 0x58}, {VirtualKey: 0x58, KeyUp: true}, // X
-	}
-	if !reflect.DeepEqual(output.events, want) {
-		t.Errorf("output events = %#v, want %#v", output.events, want)
-	}
+`).
+		Test("a b", "x x")
 }
 
 type recordingOutput struct {
-	events []Event
+	events []keyboard.Event
 	err    error
 }
 
-func newRecordingOutput() *recordingOutput {
-	return new(recordingOutput)
-}
-
-func (o *recordingOutput) Send(event Event) error {
-	o.events = append(o.events, event)
-	return o.err
+func (output *recordingOutput) Send(event keyboard.Event) error {
+	output.events = append(output.events, event)
+	return output.err
 }
