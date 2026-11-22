@@ -32,7 +32,6 @@ linters:
     - nolintlint  # Report incorrect usage of nolint directives
     - perfsprint    #Checks that fmt.Sprintf can be replaced with a faster alternative
     - prealloc      # Detect slice declarations that can be preallocated
-    # - revive           # Drop-in replacement of golint
     - staticcheck
     - testifylint
     - thelper # Checks that t.Helper() is called in test helpers
