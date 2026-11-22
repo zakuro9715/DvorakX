@@ -21,6 +21,10 @@ When implement feature, write a all available configuration example in `examples
 
 ## Code style
 
+### Linting
+
+run `golintci-lint run` to check code style.
+
 ### Testing
 
 - When testing keyboard behavior, write comments that explain what the test is doing.

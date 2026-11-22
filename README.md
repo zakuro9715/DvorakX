@@ -27,9 +27,8 @@ events:
 
 ## Development
 
-```
-go tool lefthook install
-```
+- go tool lefthook install
+- [golangci-lint](https://golangci-lint.run/docs/welcome/install/local/)
 
 ### Windows E2E test
 
