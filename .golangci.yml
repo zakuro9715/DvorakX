@@ -36,7 +36,6 @@ linters:
     # - revive           # Drop-in replacement of golint
     - staticcheck
     - testifylint
-    # - testpackage # use a separate _test package
     - thelper # Checks that t.Helper() is called in test helpers
     - unconvert # Remove unnecessary type conversions
     # - unparam # Detect unused function parameters
