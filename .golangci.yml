@@ -17,7 +17,7 @@ linters:
     - gocritic
     - gocyclo
     # - godoclint
-    # - goprintffuncname
+    - goprintffuncname
     - govet
     - iface          # Detect the incorrect use of interfaces
     - ineffassign    # Detect useless assignments

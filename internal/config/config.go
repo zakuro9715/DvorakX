@@ -80,20 +80,20 @@ func parseActions(value any, path string, positions sourcePositions, diagnostics
 	}
 	table, ok := value.(map[string]any)
 	if !ok {
-		addDiagnostic(diagnostics, positions, path, "%s must be a TOML table", path)
+		addDiagnosticf(diagnostics, positions, path, "%s must be a TOML table", path)
 		return actions
 	}
 	for _, name := range sortedKeys(table) {
 		body, ok := table[name].(map[string]any)
 		if !ok || len(body) != 1 {
-			addDiagnostic(diagnostics, positions, path+"."+name, "action %q must contain exactly one action", name)
+			addDiagnosticf(diagnostics, positions, path+"."+name, "action %q must contain exactly one action", name)
 			continue
 		}
 		switch {
 		case body["noop"] != nil:
 			arguments, ok := body["noop"].([]any)
 			if !ok || len(arguments) != 0 {
-				addDiagnostic(diagnostics, positions, path+"."+name+".noop", "noop action does not accept arguments")
+				addDiagnosticf(diagnostics, positions, path+"."+name+".noop", "noop action does not accept arguments")
 				continue
 			}
 			actions[name] = ActionSpec{Kind: NoopAction}
@@ -104,7 +104,7 @@ func parseActions(value any, path string, positions sourcePositions, diagnostics
 			}
 			actions[name] = ActionSpec{Kind: SendKeysAction, Keys: keys}
 		default:
-			addDiagnostic(diagnostics, positions, path+"."+name, "unsupported action in %q", name)
+			addDiagnosticf(diagnostics, positions, path+"."+name, "unsupported action in %q", name)
 		}
 	}
 	return actions
@@ -120,24 +120,24 @@ func parseSendKeys(value any, path string, positions sourcePositions, diagnostic
 		for index, item := range value {
 			name, ok := item.(string)
 			if !ok {
-				addDiagnostic(diagnostics, positions, fmt.Sprintf("%s[%d]", path, index), "send-keys argument at position %d must be a string", index)
+				addDiagnosticf(diagnostics, positions, fmt.Sprintf("%s[%d]", path, index), "send-keys argument at position %d must be a string", index)
 				return nil, false
 			}
 			names[index] = name
 		}
 	default:
-		addDiagnostic(diagnostics, positions, path, "send-keys must be a string or string array")
+		addDiagnosticf(diagnostics, positions, path, "send-keys must be a string or string array")
 		return nil, false
 	}
 	if len(names) == 0 {
-		addDiagnostic(diagnostics, positions, path, "send-keys must contain at least one key")
+		addDiagnosticf(diagnostics, positions, path, "send-keys must contain at least one key")
 		return nil, false
 	}
 	resolved := make([]uint16, len(names))
 	for index, name := range names {
 		key, ok := keys.Lookup(name)
 		if !ok {
-			addDiagnostic(diagnostics, positions, fmt.Sprintf("%s[%d]", path, index), "unsupported send-keys key %q", name)
+			addDiagnosticf(diagnostics, positions, fmt.Sprintf("%s[%d]", path, index), "unsupported send-keys key %q", name)
 			return nil, false
 		}
 		resolved[index] = key
@@ -161,7 +161,7 @@ func resolveDefinitionActions(tokens []definitionToken, actions map[string]Actio
 		}
 		action, ok := resolveAction(tokens[index].value, actions)
 		if !ok {
-			addDiagnostic(diagnostics, positions, fmt.Sprintf("%s[%d]", path, index), "undefined action %q", strings.TrimPrefix(tokens[index].value, "@"))
+			addDiagnosticf(diagnostics, positions, fmt.Sprintf("%s[%d]", path, index), "undefined action %q", strings.TrimPrefix(tokens[index].value, "@"))
 			valid = false
 			continue
 		}
@@ -368,7 +368,7 @@ func Parse(data []byte) (Config, error) {
 		return Config{}, diagnostics
 	}
 	if !hasLayers && len(globalRemap) == 0 && len(globalNoop) == 0 && len(globalSendKeys) == 0 {
-		addDiagnostic(diagnostics, positions, "global", "config must define at least one [global].remaps entry")
+		addDiagnosticf(diagnostics, positions, "global", "config must define at least one [global].remaps entry")
 	}
 	for source, destination := range globalRemap {
 		remap[source] = destination
@@ -386,7 +386,7 @@ func Parse(data []byte) (Config, error) {
 		sendKeys[source] = append([]uint16(nil), keys...)
 	}
 	if len(remap) == 0 && len(noop) == 0 && len(sendKeys) == 0 {
-		addDiagnostic(diagnostics, positions, "global.remaps", "config must define at least one mapping")
+		addDiagnosticf(diagnostics, positions, "global.remaps", "config must define at least one mapping")
 	}
 	if len(diagnostics.Items) != 0 {
 		return Config{}, diagnostics
@@ -530,7 +530,7 @@ func captureRemaps(value any) []map[string]string {
 	return remaps
 }
 
-func addDiagnostic(e *DiagnosticsError, positions sourcePositions, path, format string, args ...any) {
+func addDiagnosticf(e *DiagnosticsError, positions sourcePositions, path, format string, args ...any) {
 	position := positions[path]
 	if position.line == 0 {
 		position = sourcePosition{line: 1, column: 1}
@@ -552,7 +552,7 @@ func parseGlobal(raw map[string]any, positions sourcePositions, diagnostics *Dia
 	}
 	table, ok := value.(map[string]any)
 	if !ok {
-		addDiagnostic(diagnostics, positions, "global", "[global] must be a TOML table")
+		addDiagnosticf(diagnostics, positions, "global", "[global] must be a TOML table")
 		return map[uint16]uint16{}, map[uint16]bool{}, map[uint16][]uint16{}
 	}
 	remap := make(map[uint16]uint16)
@@ -561,7 +561,7 @@ func parseGlobal(raw map[string]any, positions sourcePositions, diagnostics *Dia
 	actions := parseActions(table["actions"], "global.actions", positions, diagnostics)
 	for _, name := range sortedKeys(table) {
 		if name != "remaps" && name != "actions" {
-			addDiagnostic(diagnostics, positions, "global."+name, "unsupported [global] field %q", name)
+			addDiagnosticf(diagnostics, positions, "global."+name, "unsupported [global] field %q", name)
 		}
 	}
 
@@ -601,13 +601,13 @@ func parseRemaps(value any, path string, actions map[string]ActionSpec, position
 			entryPath := fmt.Sprintf("%s[%d]", path, index)
 			entries, ok := value.(map[string]any)
 			if !ok {
-				addDiagnostic(diagnostics, positions, entryPath, "%s[%d] must be a TOML table", displayPath, index)
+				addDiagnosticf(diagnostics, positions, entryPath, "%s[%d] must be a TOML table", displayPath, index)
 				continue
 			}
 			mergeRemap(remap, noop, sendKeys, entries, actions, positions, diagnostics, entryPath)
 		}
 	default:
-		addDiagnostic(diagnostics, positions, path, "%s must be a TOML table or table array", displayPath)
+		addDiagnosticf(diagnostics, positions, path, "%s must be a TOML table or table array", displayPath)
 	}
 	return remap, noop, sendKeys
 }
@@ -625,23 +625,23 @@ func mergeRemap(remap map[uint16]uint16, noop map[uint16]bool, sendKeys map[uint
 		value := entries[sourceName]
 		destinationName, ok := value.(string)
 		if !ok {
-			addDiagnostic(diagnostics, positions, path+"."+sourceName, "invalid remap destination for %q: must be a string", sourceName)
+			addDiagnosticf(diagnostics, positions, path+"."+sourceName, "invalid remap destination for %q: must be a string", sourceName)
 			continue
 		}
 		unescapedSourceName, err := unescapeKeyName(sourceName)
 		if err != nil {
-			addDiagnostic(diagnostics, positions, path+"."+sourceName, "invalid remap source key: %v", err)
+			addDiagnosticf(diagnostics, positions, path+"."+sourceName, "invalid remap source key: %v", err)
 			continue
 		}
 		if strings.HasPrefix(destinationName, "@") {
 			action, ok := resolveAction(destinationName, actions)
 			if !ok {
-				addDiagnostic(diagnostics, positions, path+"."+sourceName, "undefined action %q", destinationName[1:])
+				addDiagnosticf(diagnostics, positions, path+"."+sourceName, "undefined action %q", destinationName[1:])
 				continue
 			}
 			source, ok := keys.Lookup(unescapedSourceName)
 			if !ok {
-				addDiagnostic(diagnostics, positions, path+"."+sourceName, "unsupported remap source key %q", unescapedSourceName)
+				addDiagnosticf(diagnostics, positions, path+"."+sourceName, "unsupported remap source key %q", unescapedSourceName)
 				continue
 			}
 			switch action.Kind {
@@ -655,17 +655,17 @@ func mergeRemap(remap map[uint16]uint16, noop map[uint16]bool, sendKeys map[uint
 		}
 		destinationName, err = unescapeKeyName(destinationName)
 		if err != nil {
-			addDiagnostic(diagnostics, positions, path+"."+sourceName, "invalid remap destination key: %v", err)
+			addDiagnosticf(diagnostics, positions, path+"."+sourceName, "invalid remap destination key: %v", err)
 			continue
 		}
 		source, ok := keys.Lookup(unescapedSourceName)
 		if !ok {
-			addDiagnostic(diagnostics, positions, path+"."+sourceName, "unsupported remap source key %q", unescapedSourceName)
+			addDiagnosticf(diagnostics, positions, path+"."+sourceName, "unsupported remap source key %q", unescapedSourceName)
 			continue
 		}
 		destination, ok := keys.Lookup(destinationName)
 		if !ok {
-			addDiagnostic(diagnostics, positions, path+"."+sourceName, "unsupported remap destination key %q", destinationName)
+			addDiagnosticf(diagnostics, positions, path+"."+sourceName, "unsupported remap destination key %q", destinationName)
 			continue
 		}
 		remap[source] = destination
@@ -679,17 +679,17 @@ func resolveLayers(raw map[string]any, remap map[uint16]uint16, noop map[uint16]
 	if !hasMeta && !hasSource {
 		if len(layerNames) != 0 {
 			for _, layerName := range layerNames {
-				addDiagnostic(diagnostics, positions, layerName, "layer table %q requires [meta] and [src]", layerName)
+				addDiagnosticf(diagnostics, positions, layerName, "layer table %q requires [meta] and [src]", layerName)
 				parseLayer(raw[layerName], layerName, positions, diagnostics)
 			}
 		}
 		return false
 	}
 	if !hasMeta {
-		addDiagnostic(diagnostics, positions, "meta", "layer configuration requires [meta]")
+		addDiagnosticf(diagnostics, positions, "meta", "layer configuration requires [meta]")
 	}
 	if !hasSource {
-		addDiagnostic(diagnostics, positions, "src", "layer configuration requires [src]")
+		addDiagnosticf(diagnostics, positions, "src", "layer configuration requires [src]")
 	}
 	if !hasMeta || !hasSource {
 		for _, layerName := range layerNames {
@@ -700,28 +700,28 @@ func resolveLayers(raw map[string]any, remap map[uint16]uint16, noop map[uint16]
 
 	meta, ok := raw["meta"].(map[string]any)
 	if !ok {
-		addDiagnostic(diagnostics, positions, "meta", "[meta] must be a TOML table")
+		addDiagnosticf(diagnostics, positions, "meta", "[meta] must be a TOML table")
 		return false
 	}
 	for _, name := range sortedKeys(meta) {
 		if name != "default" {
-			addDiagnostic(diagnostics, positions, "meta."+name, "unsupported [meta] field %q", name)
+			addDiagnosticf(diagnostics, positions, "meta."+name, "unsupported [meta] field %q", name)
 		}
 	}
 	defaultValue, ok := meta["default"].(string)
 	if !ok {
-		addDiagnostic(diagnostics, positions, "meta.default", "[meta].default must be a string layer reference")
+		addDiagnosticf(diagnostics, positions, "meta.default", "[meta].default must be a string layer reference")
 		return false
 	}
 	defaultLayer, ok := strings.CutPrefix(defaultValue, "&")
 	if !ok || defaultLayer == "" {
-		addDiagnostic(diagnostics, positions, "meta.default", "[meta].default must reference a layer with &")
+		addDiagnosticf(diagnostics, positions, "meta.default", "[meta].default must reference a layer with &")
 		return false
 	}
 
 	layerValue, ok := raw[defaultLayer]
 	if !ok {
-		addDiagnostic(diagnostics, positions, "meta.default", "[meta].default references undefined layer %q", defaultLayer)
+		addDiagnosticf(diagnostics, positions, "meta.default", "[meta].default references undefined layer %q", defaultLayer)
 		return false
 	}
 	for _, layerName := range layerNames {
@@ -773,14 +773,14 @@ func resolveDefaultLayer(sourceValue, layerValue any, defaultLayer string, remap
 		destination = source
 	}
 	if len(source) != len(destination) {
-		addDiagnostic(diagnostics, positions, defaultLayer+".def", "source and default layer definitions have different lengths: %d and %d", len(source), len(destination))
+		addDiagnosticf(diagnostics, positions, defaultLayer+".def", "source and default layer definitions have different lengths: %d and %d", len(source), len(destination))
 		return false
 	}
 
 	for index, sourceToken := range source {
 		sourceKey, sourceOK := keys.Lookup(sourceToken.value)
 		if !sourceOK {
-			addDiagnostic(diagnostics, positions, fmt.Sprintf("src.def[%d]", index), "unsupported source layer key %q at position %d", sourceToken.value, index)
+			addDiagnosticf(diagnostics, positions, fmt.Sprintf("src.def[%d]", index), "unsupported source layer key %q at position %d", sourceToken.value, index)
 			continue
 		}
 		if !destination[index].escaped && destination[index].value == "_" {
@@ -797,7 +797,7 @@ func resolveDefaultLayer(sourceValue, layerValue any, defaultLayer string, remap
 		}
 		destinationKey, destinationOK := keys.Lookup(destination[index].value)
 		if !destinationOK {
-			addDiagnostic(diagnostics, positions, fmt.Sprintf("%s.def[%d]", defaultLayer, index), "unsupported default layer key %q at position %d", destination[index].value, index)
+			addDiagnosticf(diagnostics, positions, fmt.Sprintf("%s.def[%d]", defaultLayer, index), "unsupported default layer key %q at position %d", destination[index].value, index)
 			continue
 		}
 		remap[sourceKey] = destinationKey
@@ -842,17 +842,17 @@ func parseLayerRemaps(table map[string]any, layerName string, actions map[string
 func parseDefinition(value any, path string, actions map[string]ActionSpec, positions sourcePositions, diagnostics *DiagnosticsError) ([]definitionToken, bool) {
 	table, ok := value.(map[string]any)
 	if !ok {
-		addDiagnostic(diagnostics, positions, strings.Trim(path, "[]"), "%s must be a TOML table", path)
+		addDiagnosticf(diagnostics, positions, strings.Trim(path, "[]"), "%s must be a TOML table", path)
 		return nil, false
 	}
 	for _, name := range sortedKeys(table) {
 		if name != "def" && name != "actions" && name != "remaps" {
-			addDiagnostic(diagnostics, positions, strings.Trim(path, "[]")+"."+name, "unsupported %s field %q", path, name)
+			addDiagnosticf(diagnostics, positions, strings.Trim(path, "[]")+"."+name, "unsupported %s field %q", path, name)
 		}
 	}
 	definition, ok := table["def"]
 	if !ok {
-		addDiagnostic(diagnostics, positions, strings.Trim(path, "[]")+".def", "%s.def is required", path)
+		addDiagnosticf(diagnostics, positions, strings.Trim(path, "[]")+".def", "%s.def is required", path)
 		return nil, false
 	}
 	definitionPath := strings.Trim(path, "[]") + ".def"
@@ -863,7 +863,7 @@ func parseDefinition(value any, path string, actions map[string]ActionSpec, posi
 		}
 		tokens, err := splitDefinition(definition)
 		if err != nil {
-			addDiagnostic(diagnostics, positions, definitionPath, "%s.def: %v", path, err)
+			addDiagnosticf(diagnostics, positions, definitionPath, "%s.def: %v", path, err)
 			return nil, false
 		}
 		return resolveDefinitionActions(tokens, actions, definitionPath, positions, diagnostics)
@@ -873,13 +873,13 @@ func parseDefinition(value any, path string, actions map[string]ActionSpec, posi
 		for index, value := range definition {
 			key, ok := value.(string)
 			if !ok {
-				addDiagnostic(diagnostics, positions, fmt.Sprintf("%s[%d]", definitionPath, index), "%s.def entry at position %d must be a string", path, index)
+				addDiagnosticf(diagnostics, positions, fmt.Sprintf("%s[%d]", definitionPath, index), "%s.def entry at position %d must be a string", path, index)
 				valid = false
 				continue
 			}
 			unescaped, err := unescapeKeyName(key)
 			if err != nil {
-				addDiagnostic(diagnostics, positions, fmt.Sprintf("%s[%d]", definitionPath, index), "%s.def entry at position %d: %v", path, index, err)
+				addDiagnosticf(diagnostics, positions, fmt.Sprintf("%s[%d]", definitionPath, index), "%s.def entry at position %d: %v", path, index, err)
 				valid = false
 				continue
 			}
@@ -890,7 +890,7 @@ func parseDefinition(value any, path string, actions map[string]ActionSpec, posi
 		}
 		return resolveDefinitionActions(keys, actions, definitionPath, positions, diagnostics)
 	default:
-		addDiagnostic(diagnostics, positions, definitionPath, "%s.def must be a string or string array", path)
+		addDiagnosticf(diagnostics, positions, definitionPath, "%s.def must be a string or string array", path)
 		return nil, false
 	}
 }
