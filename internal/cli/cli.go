@@ -149,6 +149,7 @@ func loadConfig(path, displayPath string) (config.Config, error) {
 	return loaded, err
 }
 
+//nolint:unparam
 func formatConfigError(operation, path string, err error, colors ...bool) string {
 	color := len(colors) > 0 && colors[0]
 	formatter := config.PrettyFormatter{Color: color}

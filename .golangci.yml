@@ -38,7 +38,7 @@ linters:
     - testifylint
     - thelper # Checks that t.Helper() is called in test helpers
     - unconvert # Remove unnecessary type conversions
-    # - unparam # Detect unused function parameters
+    - unparam # Detect unused function parameters
     - unused
     - usestdlibvars
     - usetesting
