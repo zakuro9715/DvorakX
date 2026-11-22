@@ -1,6 +1,7 @@
 package config
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"os"
@@ -314,7 +315,7 @@ func sourceLine(data []byte, line int) string {
 	}
 	start := 0
 	for currentLine := 1; currentLine < line; currentLine++ {
-		next := strings.IndexByte(string(data[start:]), '\n')
+		next := bytes.IndexByte(data[start:], '\n')
 		if next < 0 {
 			return ""
 		}

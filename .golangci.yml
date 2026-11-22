@@ -24,7 +24,7 @@ linters:
     - intrange       # Use integer range for loop
     - ireturn        # Accept Interfaces, Return Concrete Types
     - makezero
-    # - mirror         # Avoid unnecessary []byte/string conversion calls
+    - mirror         # Avoid unnecessary []byte/string conversion calls
     - misspell
     - modernize
     - nestif
