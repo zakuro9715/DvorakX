@@ -2,8 +2,13 @@ module github.com/zakuro9715/DvorakX
 
 go 1.27.0
 
+tool github.com/evilmartians/lefthook/v2
+
 require (
+	github.com/fatih/color v1.18.0
 	github.com/pelletier/go-toml/v2 v2.4.3
+	github.com/sergi/go-diff v1.4.5
+	github.com/stretchr/testify v1.12.1
 	github.com/urfave/cli/v3 v3.14.0
 )
 
@@ -22,7 +27,6 @@ require (
 	github.com/clipperhouse/uax29/v2 v2.7.0 // indirect
 	github.com/creack/pty v1.1.24 // indirect
 	github.com/evilmartians/lefthook/v2 v2.2.2 // indirect
-	github.com/fatih/color v1.18.0 // indirect
 	github.com/gabriel-vasile/mimetype v1.4.15 // indirect
 	github.com/go-viper/mapstructure/v2 v2.4.0 // indirect
 	github.com/gobwas/glob v0.2.3 // indirect
@@ -49,6 +53,7 @@ require (
 	github.com/rivo/uniseg v0.4.7 // indirect
 	github.com/schollz/progressbar/v3 v3.19.1 // indirect
 	github.com/spf13/afero v1.15.0 // indirect
+	github.com/stretchr/objx v0.5.3 // indirect
 	github.com/tidwall/jsonc v0.3.3 // indirect
 	github.com/xo/terminfo v0.0.0-20220910002029-abceb7e1c41e // indirect
 	github.com/yosida95/uritemplate/v3 v3.0.2 // indirect
@@ -60,5 +65,3 @@ require (
 	golang.org/x/term v0.46.0 // indirect
 	golang.org/x/text v0.42.0 // indirect
 )
-
-tool github.com/evilmartians/lefthook/v2
