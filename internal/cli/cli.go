@@ -81,6 +81,7 @@ func run(ctx context.Context, configPath string, debug bool, runner Runner) erro
 
 	go watchConfig(configPath, displayPath, mappings, stop, debug)
 
+	//nolint:forbidigo
 	fmt.Printf("DvorakX remapping configured keys; press Ctrl+C to stop.\n")
 	return runner(mappings, stop, debug)
 }

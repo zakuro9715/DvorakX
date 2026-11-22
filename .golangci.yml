@@ -9,7 +9,7 @@ linters:
     - errname
     - errorlint
     - exhaustive
-    # - forbidigo   # Forbid print()
+    - forbidigo   # Forbid print()
     - gocheckcompilerdirectives
     - gochecknoinits
     - gocognit
