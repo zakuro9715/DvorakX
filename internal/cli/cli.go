@@ -56,9 +56,8 @@ func run(ctx context.Context, configPath string, debug bool, runner Runner) erro
 	if err != nil {
 		return err
 	}
-	remap, noop, sendKeys := loaded.ResolveMappings()
 	if debug {
-		fmt.Fprintf(os.Stderr, "dvorakv: debug: loaded %d mapping(s) from %s\n", len(remap), configPath)
+		fmt.Fprintf(os.Stderr, "dvorakv: debug: loaded %d mapping stage(s) from %s\n", len(loaded.Stages), configPath)
 	}
 
 	stop := make(chan struct{})
@@ -75,10 +74,10 @@ func run(ctx context.Context, configPath string, debug bool, runner Runner) erro
 		close(stop)
 	}()
 
-	mappings := keyboard.NewMappingsWithActions(remap, noop, sendKeys)
+	mappings := keyboard.NewMappingsFromStages(loaded.Stages)
 	go watchConfig(configPath, displayPath, mappings, stop, debug)
 
-	fmt.Printf("DvorakX remapping %d key(s); press Ctrl+C to stop.\n", len(remap))
+	fmt.Printf("DvorakX remapping %d mapping stage(s); press Ctrl+C to stop.\n", len(loaded.Stages))
 	return runner(mappings, stop, debug)
 }
 
@@ -124,10 +123,9 @@ func watchConfig(path, displayPath string, mappings *keyboard.Mappings, stop <-c
 				fmt.Fprintln(os.Stderr, formatConfigError("reload", path, err, colorOutput(os.Stderr)))
 				continue
 			}
-			remap, noop, sendKeys := loaded.ResolveMappings()
-			mappings.ReplaceWithActions(remap, noop, sendKeys)
+			mappings.ReplaceStages(loaded.Stages)
 			if debug {
-				fmt.Fprintf(os.Stderr, "dvorakv: debug: reloaded %d mapping(s) from %s\n", len(remap), path)
+				fmt.Fprintf(os.Stderr, "dvorakv: debug: reloaded %d mapping stage(s) from %s\n", len(loaded.Stages), path)
 			}
 		}
 

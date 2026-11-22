@@ -25,6 +25,22 @@ type Config struct {
 	Remap    map[uint16]uint16
 	Noop     map[uint16]bool
 	SendKeys map[uint16][]uint16
+
+	// Stages preserves the ordered transformations consumed by keyboard.
+	Stages []MappingStage
+}
+
+// MappingStage is one ordered step in keyboard processing.
+type MappingStage struct {
+	Mappings map[uint16]StageMapping
+}
+
+// StageMapping describes a transformation in one mapping stage.
+type StageMapping struct {
+	Destination uint16
+	Noop        bool
+	SendKeys    []uint16
+	Passthrough bool
 }
 
 // MetaConfig contains settings from the [meta] table.
@@ -402,7 +418,87 @@ func Parse(data []byte) (Config, error) {
 		}
 		config.Layers[name] = captureLayer(value)
 	}
+	config.Stages = captureStages(raw)
 	return config, nil
+}
+
+func captureStages(raw map[string]any) []MappingStage {
+	globalRemap, globalNoop, globalSendKeys := parseGlobal(raw, nil, nil)
+	stages := []MappingStage{stageFromMaps(globalRemap, globalNoop, globalSendKeys)}
+
+	meta, hasMeta := raw["meta"].(map[string]any)
+	sourceValue, hasSource := raw["src"]
+	if !hasMeta || !hasSource {
+		return stages
+	}
+	defaultValue, _ := meta["default"].(string)
+	defaultLayer, ok := strings.CutPrefix(defaultValue, "&")
+	if !ok || defaultLayer == "" {
+		return stages
+	}
+	layerValue, ok := raw[defaultLayer]
+	if !ok {
+		return stages
+	}
+	sourceActions := map[string]ActionSpec{}
+	if sourceTable, ok := sourceValue.(map[string]any); ok {
+		sourceActions = parseActions(sourceTable["actions"], "src.actions", nil, nil)
+	}
+	destinationTable, _ := layerValue.(map[string]any)
+	destinationActions := parseActions(destinationTable["actions"], defaultLayer+".actions", nil, nil)
+	source, sourceOK := parseDefinition(sourceValue, "[src]", sourceActions, nil, nil)
+	destination, destinationOK := parseDefinition(layerValue, "["+defaultLayer+"]", destinationActions, nil, nil)
+	if !sourceOK || !destinationOK || len(destination) == 1 && destination[0].value == "#src" {
+		if sourceOK && len(destination) == 1 && destination[0].value == "#src" {
+			destination = source
+		} else {
+			return stages
+		}
+	}
+	if len(source) != len(destination) {
+		return stages
+	}
+	definition := MappingStage{Mappings: make(map[uint16]StageMapping, len(source))}
+	for index, sourceToken := range source {
+		sourceKey, ok := virtualKey(sourceToken.value)
+		if !ok {
+			continue
+		}
+		target := destination[index]
+		switch target.action.Kind {
+		case NoopAction:
+			definition.Mappings[sourceKey] = StageMapping{Noop: true}
+		case SendKeysAction:
+			definition.Mappings[sourceKey] = StageMapping{SendKeys: append([]uint16(nil), target.action.Keys...)}
+		default:
+			if !target.escaped && target.value == "_" {
+				definition.Mappings[sourceKey] = StageMapping{Passthrough: true}
+				continue
+			}
+			destinationKey, ok := virtualKey(target.value)
+			if ok {
+				definition.Mappings[sourceKey] = StageMapping{Destination: destinationKey}
+			}
+		}
+	}
+	stages = append(stages, definition)
+	layerRemap, layerNoop, layerSendKeys := parseLayerRemaps(destinationTable, defaultLayer, destinationActions, nil, nil)
+	stages = append(stages, stageFromMaps(layerRemap, layerNoop, layerSendKeys))
+	return stages
+}
+
+func stageFromMaps(remap map[uint16]uint16, noop map[uint16]bool, sendKeys map[uint16][]uint16) MappingStage {
+	stage := MappingStage{Mappings: make(map[uint16]StageMapping, len(remap)+len(noop)+len(sendKeys))}
+	for source, destination := range remap {
+		stage.Mappings[source] = StageMapping{Destination: destination}
+	}
+	for source := range noop {
+		stage.Mappings[source] = StageMapping{Noop: true}
+	}
+	for source, keys := range sendKeys {
+		stage.Mappings[source] = StageMapping{SendKeys: append([]uint16(nil), keys...)}
+	}
+	return stage
 }
 
 func captureMeta(raw map[string]any) MetaConfig {

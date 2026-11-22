@@ -4,6 +4,8 @@ import (
 	"errors"
 	"reflect"
 	"testing"
+
+	"github.com/zakuro9715/DvorakX/internal/config"
 )
 
 func TestSimulatedKeyboardRemapsPressedKeyAfterMappingsReload(t *testing.T) {
@@ -146,6 +148,45 @@ func TestSimulatedKeyboardPassesThroughReleaseWithoutPress(t *testing.T) {
 	}
 	if len(output.events) != 0 {
 		t.Errorf("output events = %#v, want none", output.events)
+	}
+}
+
+func TestSimulatedKeyboardAppliesDefinitionsInOrder(t *testing.T) {
+	loaded, err := config.Parse([]byte(`
+[global]
+remaps = { "a" = "b" }
+
+[meta]
+default = "&layer"
+
+[src]
+def = ["a", "b", "c"]
+
+[layer]
+def = ["e", "f", "g"]
+remaps = { f = "x" }
+`))
+	if err != nil {
+		t.Fatalf("Parse() error = %v", err)
+	}
+
+	output := newRecordingOutput()
+	keyboard := NewSimulatedKeyboard(NewMappingsFromStages(loaded.Stages), output)
+	for _, key := range []uint16{0x41, 0x42} { // A and B
+		if handled, err := keyboard.Handle(Event{VirtualKey: key}); !handled || err != nil {
+			t.Fatalf("handle key down 0x%X = (%t, %v), want (true, nil)", key, handled, err)
+		}
+		if handled, err := keyboard.Handle(Event{VirtualKey: key, KeyUp: true}); !handled || err != nil {
+			t.Fatalf("handle key up 0x%X = (%t, %v), want (true, nil)", key, handled, err)
+		}
+	}
+
+	want := []Event{
+		{VirtualKey: 0x58}, {VirtualKey: 0x58, KeyUp: true}, // X
+		{VirtualKey: 0x58}, {VirtualKey: 0x58, KeyUp: true}, // X
+	}
+	if !reflect.DeepEqual(output.events, want) {
+		t.Errorf("output events = %#v, want %#v", output.events, want)
 	}
 }
 
