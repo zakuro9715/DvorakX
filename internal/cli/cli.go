@@ -134,7 +134,6 @@ func watchConfig(path, displayPath string, mappings *keyboard.Mappings, stop <-c
 				fmt.Fprintf(os.Stderr, "dvorakv: debug: reloaded config from %s\n", path)
 			}
 		}
-
 	}
 }
 

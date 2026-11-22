@@ -12,5 +12,7 @@ type input struct {
 	_    [8]byte
 }
 
-var _ [unsafe.Sizeof(input{}) - 28]byte
-var _ [28 - unsafe.Sizeof(input{})]byte
+var (
+	_ [unsafe.Sizeof(input{}) - 28]byte
+	_ [28 - unsafe.Sizeof(input{})]byte
+)
