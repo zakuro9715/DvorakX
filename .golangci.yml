@@ -5,7 +5,7 @@ linters:
   enable:
     - errcheck
     - govet
-    - ineffassign
+    - ineffassign # Detects useless assignments
     - modernize
     - staticcheck
     - unused
