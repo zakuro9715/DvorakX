@@ -1,0 +1,55 @@
+# Policy: Enable only 'meaningful' linters. Don't use too many linters.
+version: "2"
+linters:
+  default: none
+  enable:
+    - bidichk
+    - dupl
+    - errcheck
+    - errname
+    - errorlint
+    - exhaustive
+    - forbidigo   # Forbid print()
+    - gocheckcompilerdirectives
+    - gochecknoinits
+    - gocognit
+    - goconst
+    - gocritic
+    - gocyclo
+    - godoclint
+    - goprintffuncname
+    - govet
+    - iface          # Detect the incorrect use of interfaces
+    - ineffassign    # Detect useless assignments
+    - intrange       # Use integer range for loop
+    - ireturn        # Accept Interfaces, Return Concrete Types
+    - makezero
+    - mirror         # Avoid unnecessary []byte/string conversion calls
+    - misspell
+    - modernize
+    - nestif
+    - nilnesserr
+    - nolintlint  # Report incorrect usage of nolint directives
+    - perfsprint    #Checks that fmt.Sprintf can be replaced with a faster alternative
+    - prealloc      # Detect slice declarations that can be preallocated
+    - staticcheck
+    - testifylint
+    - thelper # Checks that t.Helper() is called in test helpers
+    - unconvert # Remove unnecessary type conversions
+    - unparam # Detect unused function parameters
+    - unused
+    - usestdlibvars
+    - usetesting
+    - wastedassign
+    - whitespace
+  settings:
+    forbidigo:
+      forbid:
+        - pattern: ^print(ln)?$
+        - pattern: ^fmt\.Print.*$
+    goconst:
+      ignore-tests: true
+formatters:
+  enable:
+    - gofumpt
+    - goimports

@@ -132,14 +132,14 @@ func Run(mappings *keyboard.Mappings, stop <-chan struct{}, debugOutput io.Write
 	}
 	debugf(debugOutput, "keyboard hook installed")
 	defer func() {
-		procUnhookWindowsHookEx.Call(hook)
+		_, _, _ = procUnhookWindowsHookEx.Call(hook)
 		debugf(debugOutput, "keyboard hook stopped")
 	}()
 
 	if stop != nil {
 		go func() {
 			<-stop
-			procPostThreadMessageW.Call(threadID, wmQuit, 0, 0)
+			_, _, _ = procPostThreadMessageW.Call(threadID, wmQuit, 0, 0)
 		}()
 	}
 
@@ -171,6 +171,6 @@ func isExtendedVirtualKey(key uint16) bool {
 
 func debugf(output io.Writer, format string, args ...any) {
 	if output != nil {
-		fmt.Fprintf(output, "dvorakv: debug: "+format+"\n", args...)
+		_, _ = fmt.Fprintf(output, "dvorakv: debug: "+format+"\n", args...)
 	}
 }

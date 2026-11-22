@@ -1,5 +1,7 @@
 package keyboard
 
+import "slices"
+
 // Event is an OS-independent virtual key event.
 type Event struct {
 	VirtualKey uint16
@@ -122,8 +124,8 @@ func (k *SimulatedKeyboard) sendKeys(keys []uint16) error {
 			return err
 		}
 	}
-	for index := len(held) - 1; index >= 0; index-- {
-		if err := k.output.Send(Event{VirtualKey: held[index], KeyUp: true}); err != nil {
+	for _, key := range slices.Backward(held) {
+		if err := k.output.Send(Event{VirtualKey: key, KeyUp: true}); err != nil {
 			return err
 		}
 	}

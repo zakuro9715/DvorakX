@@ -189,12 +189,13 @@ func formatEvents(events, sourceEvents []keyboard.Event, sourceTokens []string) 
 		event := events[index]
 		key := formatKey(event.VirtualKey)
 		length := eventTokenLength(events, index)
-		if length == 2 {
+		switch {
+		case length == 2:
 			tokens = append(tokens, key)
 			index += length - 1
-		} else if event.KeyUp {
+		case event.KeyUp:
 			tokens = append(tokens, key+":up")
-		} else {
+		default:
 			tokens = append(tokens, key+":down")
 		}
 	}

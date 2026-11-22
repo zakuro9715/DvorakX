@@ -1,6 +1,7 @@
 package config
 
 import (
+	"errors"
 	"path/filepath"
 	"reflect"
 	"strings"
@@ -308,7 +309,7 @@ remaps = [{ caps = "@missing" }]
 
 func TestParseFormatsDiagnosticWithSourceLine(t *testing.T) {
 	_, err := Parse([]byte("[global]\nhotkey = 'abc'\n"))
-	diagnostics, ok := err.(*Diagnostics)
+	diagnostics, ok := errors.AsType[*DiagnosticsError](err)
 	if !ok || len(diagnostics.Items) != 1 {
 		t.Fatalf("Parse() error = %v, want one structured error", err)
 	}
@@ -334,12 +335,12 @@ func TestParseCollectsUnsupportedGlobalFields(t *testing.T) {
 
 func TestParseReportsTomlSyntaxErrorPosition(t *testing.T) {
 	_, err := Parse([]byte("[global]\nremaps = [{ caps = \"ctrl\" }\n"))
-	diagnostics, ok := err.(*Diagnostics)
+	diagnostics, ok := errors.AsType[*DiagnosticsError](err)
 	if !ok {
-		t.Fatalf("Parse() error type = %T, want *Diagnostics", err)
+		t.Fatalf("Parse() error type = %T, want *DiagnosticsError", err)
 	}
 	if len(diagnostics.Items) != 1 {
-		t.Fatalf("len(Diagnostics) = %d, want 1", len(diagnostics.Items))
+		t.Fatalf("len(DiagnosticsError) = %d, want 1", len(diagnostics.Items))
 	}
 	diagnostic := diagnostics.Items[0]
 	if diagnostic.Line != 2 || diagnostic.Column < 1 {
@@ -369,12 +370,12 @@ func TestParseRejectsInvalidRemapValue(t *testing.T) {
 
 func TestParseCollectsAllRemapErrorsWithPositions(t *testing.T) {
 	_, err := Parse([]byte("[global]\nremaps = [{ caps = 1, bad = 'invalid' }, { nope = 'ctrl' }]\n"))
-	diagnostics, ok := err.(*Diagnostics)
+	diagnostics, ok := errors.AsType[*DiagnosticsError](err)
 	if !ok {
-		t.Fatalf("Parse() error type = %T, want *Diagnostics", err)
+		t.Fatalf("Parse() error type = %T, want *DiagnosticsError", err)
 	}
 	if len(diagnostics.Items) != 3 {
-		t.Fatalf("len(Diagnostics) = %d, want 3: %v", len(diagnostics.Items), diagnostics)
+		t.Fatalf("len(DiagnosticsError) = %d, want 3: %v", len(diagnostics.Items), diagnostics)
 	}
 	for index, want := range []struct {
 		column int
@@ -411,12 +412,12 @@ def = ["also-invalid"]
 [other]
 extra = true
 `))
-	diagnostics, ok := err.(*Diagnostics)
+	diagnostics, ok := errors.AsType[*DiagnosticsError](err)
 	if !ok {
-		t.Fatalf("Parse() error type = %T, want *Diagnostics", err)
+		t.Fatalf("Parse() error type = %T, want *DiagnosticsError", err)
 	}
 	if len(diagnostics.Items) != 3 {
-		t.Fatalf("len(Diagnostics) = %d, want 3: %v", len(diagnostics.Items), diagnostics)
+		t.Fatalf("len(DiagnosticsError) = %d, want 3: %v", len(diagnostics.Items), diagnostics)
 	}
 	for _, want := range []string{
 		`unsupported source layer key "invalid"`,
@@ -491,9 +492,9 @@ def = ["invalid"]
 [qwerty]
 def = "#src"
 `))
-	diagnostics, ok := err.(*Diagnostics)
+	diagnostics, ok := errors.AsType[*DiagnosticsError](err)
 	if !ok {
-		t.Fatalf("Parse() error type = %T, want *errors.Diagnostics", err)
+		t.Fatalf("Parse() error type = %T, want *errors.DiagnosticsError", err)
 	}
 	if len(diagnostics.Items) != 1 {
 		t.Fatalf("len(errors) = %d, want 1: %#v", len(diagnostics.Items), diagnostics.Items)
@@ -578,7 +579,7 @@ func TestParseRejectsInvalidStaticLayer(t *testing.T) {
 }
 
 func hasErrorMessage(err error, want string) bool {
-	diagnostics, ok := err.(*Diagnostics)
+	diagnostics, ok := errors.AsType[*DiagnosticsError](err)
 	if !ok {
 		return false
 	}

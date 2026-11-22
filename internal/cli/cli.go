@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/signal"
@@ -80,6 +81,7 @@ func run(ctx context.Context, configPath string, debug bool, runner Runner) erro
 
 	go watchConfig(configPath, displayPath, mappings, stop, debug)
 
+	//nolint:forbidigo
 	fmt.Printf("DvorakX remapping configured keys; press Ctrl+C to stop.\n")
 	return runner(mappings, stop, debug)
 }
@@ -134,13 +136,12 @@ func watchConfig(path, displayPath string, mappings *keyboard.Mappings, stop <-c
 				fmt.Fprintf(os.Stderr, "dvorakv: debug: reloaded config from %s\n", path)
 			}
 		}
-
 	}
 }
 
 func loadConfig(path, displayPath string) (config.Config, error) {
 	loaded, err := config.LoadFile(path)
-	if diagnostics, ok := err.(*config.Diagnostics); ok && displayPath != "" {
+	if diagnostics, ok := errors.AsType[*config.DiagnosticsError](err); ok && displayPath != "" {
 		for index := range diagnostics.Items {
 			diagnostics.Items[index].Path = displayPath
 		}
@@ -148,11 +149,12 @@ func loadConfig(path, displayPath string) (config.Config, error) {
 	return loaded, err
 }
 
+//nolint:unparam
 func formatConfigError(operation, path string, err error, colors ...bool) string {
 	color := len(colors) > 0 && colors[0]
 	formatter := config.PrettyFormatter{Color: color}
 	var output strings.Builder
-	if diagnostics, ok := err.(*config.Diagnostics); ok {
+	if diagnostics, ok := errors.AsType[*config.DiagnosticsError](err); ok {
 		fmt.Fprintf(&output, "dvorakv: %s config %q:\n", operation, path)
 		_ = formatter.FormatTo(&output, diagnostics.Items)
 		return output.String()
