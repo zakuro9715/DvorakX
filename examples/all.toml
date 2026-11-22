@@ -4,11 +4,17 @@
 default = "&base"
 
 [global]
-actions = { block-key = { noop = [] } }
 remaps = [
 	{ caps = "ctrl" },
 	{ x = "@block-key" },
+	{ y = "@copy-paste" },
+	{ z = "@copy-paste2" },
 ]
+
+[global.actions]
+block-key = { noop = [] }
+copy-paste  = { send-keys = ["ctrl", "c", "v"] }
+copy-paste2 = { send-keys = "ctrl c v" }
 
 [src]
 def = ["a", "b", "c", "d"]

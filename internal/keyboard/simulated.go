@@ -40,6 +40,17 @@ func (k *SimulatedKeyboard) Handle(event Event) (bool, error) {
 		return true, nil
 	}
 
+	if len(mapping.SendKeys) != 0 {
+		if event.KeyUp {
+			return true, nil
+		}
+		if err := k.sendKeys(mapping.SendKeys); err != nil {
+			delete(k.pressed, event.VirtualKey)
+			return false, err
+		}
+		return true, nil
+	}
+
 	if err := k.output.Send(Event{VirtualKey: mapping.Destination, KeyUp: event.KeyUp}); err != nil {
 		return false, err
 	}
@@ -66,4 +77,39 @@ func (k *SimulatedKeyboard) mapping(event Event) (Mapping, bool) {
 	}
 	k.pressed[event.VirtualKey] = mapping
 	return mapping, true
+}
+
+func (k *SimulatedKeyboard) sendKeys(keys []uint16) error {
+	held := make([]uint16, 0, len(keys))
+	for _, key := range keys {
+		if isModifier(key) {
+			if err := k.output.Send(Event{VirtualKey: key}); err != nil {
+				return err
+			}
+			held = append(held, key)
+			continue
+		}
+		if err := k.output.Send(Event{VirtualKey: key}); err != nil {
+			return err
+		}
+		if err := k.output.Send(Event{VirtualKey: key, KeyUp: true}); err != nil {
+			return err
+		}
+	}
+	for index := len(held) - 1; index >= 0; index-- {
+		if err := k.output.Send(Event{VirtualKey: held[index], KeyUp: true}); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func isModifier(key uint16) bool {
+	switch key {
+	case 0x10, 0x11, 0x12, 0x5B, 0x5C, // Shift, Ctrl, Alt, Left/Right Win
+		0xA0, 0xA1, 0xA2, 0xA3, 0xA4, 0xA5: // Left/Right Shift/Ctrl/Alt
+		return true
+	default:
+		return false
+	}
 }

@@ -2,6 +2,7 @@ package config
 
 import (
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -73,7 +74,7 @@ disable = { noop = [] }
 	if base.Remaps[0]["x"] != "z" {
 		t.Errorf("base remaps = %#v, want x -> z", base.Remaps)
 	}
-	if base.Actions["disable"] != NoopAction {
+	if base.Actions["disable"].Kind != NoopAction {
 		t.Errorf("base actions = %#v, want disable=noop", base.Actions)
 	}
 }
@@ -226,6 +227,58 @@ disable = { noop = [] }
 	}
 }
 
+func TestParseSendKeysActionReferencesSupportStringAndArray(t *testing.T) {
+	config, err := Parse([]byte(`
+[global]
+remaps = [{ x = "@copy", y = "@paste" }]
+
+[global.actions]
+copy = { send-keys = ["ctrl", "c"] }
+paste = { send-keys = "ctrl v" }
+`))
+	if err != nil {
+		t.Fatalf("Parse() error = %v", err)
+	}
+	if got := config.SendKeys[vkA+23]; !reflect.DeepEqual(got, []uint16{vkControl, vkA + 2}) {
+		t.Errorf("SendKeys[x] = %#v, want ctrl+c", got)
+	}
+	if got := config.SendKeys[vkA+24]; !reflect.DeepEqual(got, []uint16{vkControl, vkA + 21}) {
+		t.Errorf("SendKeys[y] = %#v, want ctrl+v", got)
+	}
+}
+
+func TestParseRejectsInvalidSendKeysAction(t *testing.T) {
+	tests := []struct {
+		name string
+		data string
+		want string
+	}{
+		{
+			name: "invalid argument type",
+			data: "[global.actions]\ncopy = { send-keys = 1 }\n[global.remaps]\nx = '@copy'\n",
+			want: "send-keys must be a string or string array",
+		},
+		{
+			name: "empty argument",
+			data: "[global.actions]\ncopy = { send-keys = '' }\n[global.remaps]\nx = '@copy'\n",
+			want: "send-keys must contain at least one key",
+		},
+		{
+			name: "unknown key",
+			data: "[global.actions]\ncopy = { send-keys = ['unknown'] }\n[global.remaps]\nx = '@copy'\n",
+			want: `unsupported send-keys key "unknown"`,
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			_, err := Parse([]byte(test.data))
+			if err == nil || !hasErrorMessage(err, test.want) {
+				t.Fatalf("Parse() error = %v, want %q", err, test.want)
+			}
+		})
+	}
+}
+
 func TestParseLayerNoopActionReference(t *testing.T) {
 	config, err := Parse([]byte(`
 [meta]
@@ -245,6 +298,28 @@ disable = { noop = [] }
 	}
 	if !config.Noop[vkA] {
 		t.Fatalf("Noop[a] = false, want true")
+	}
+}
+
+func TestParseLayerSendKeysActionReference(t *testing.T) {
+	config, err := Parse([]byte(`
+[meta]
+default = "&base"
+
+[src]
+def = ["a"]
+
+[base]
+def = ["@copy"]
+
+[base.actions]
+copy = { send-keys = "ctrl c" }
+`))
+	if err != nil {
+		t.Fatalf("Parse() error = %v", err)
+	}
+	if got := config.SendKeys[vkA]; !reflect.DeepEqual(got, []uint16{vkControl, vkA + 2}) {
+		t.Errorf("SendKeys[a] = %#v, want ctrl+c", got)
 	}
 }
 

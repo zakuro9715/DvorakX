@@ -97,7 +97,7 @@ abc-10ms-efg = [ { send-keys = ['abc'] }, 10, { send-keys = ['efg'] } ]
 Call multiple actions in one action with array.
 
 ```
-abcefg = [ send-keys = ['abc'], send-keys = ['efg'] ]
+abcefg = [ send-keys = 'a b c'], send-keys = 'e f g' ]
 ```
 
 #### Interval
@@ -105,7 +105,7 @@ abcefg = [ send-keys = ['abc'], send-keys = ['efg'] ]
 Insert interval between actions with `delay` action.
 
 ```
-abc-100ms-efg = [ send-keys = ['abc'], delay = [100], send-keys = ['efg'] ]
+abc-100ms-efg = [ send-keys = 'a b c', delay = [100], send-keys = 'e f g' ]
 ```
 
 ### Pre-defined Actions
@@ -122,11 +122,18 @@ actions { disable-key = { noop = [] } }
 
 #### send-keys
 
-`send-keys` action send key sequence.
+`send-keys` action send key sequence. key-sequence is space separated string or array of character.
 
 ```
-remaps = { a = '@send-abc' }
-actions = { send-abc = { send-keys = ['abc'] } }
+actions = { send-abc1 = { send-keys = 'a b c' } }
+actions = { send-abc2 = { send-keys = ['a', 'b', 'c'] }
+```
+
+Modifier keys are released after key sequence.
+
+```
+# press ctrl, press a, b, release ctrl.
+send-ctrl-a-b = { send-keys = ['ctrl', 'a', 'b'] }
 ```
 
 #### passthrough

@@ -50,7 +50,7 @@ func TestSimulatedKeyboardSuppressesNoopEvents(t *testing.T) {
 
 	output := newRecordingOutput()
 	keyboard := NewSimulatedKeyboard(
-		NewMappingsWithActions(nil, map[uint16]bool{0x41: true}), // A
+		NewMappingsWithActions(nil, map[uint16]bool{0x41: true}, nil), // A
 		output,
 	)
 
@@ -63,6 +63,56 @@ func TestSimulatedKeyboardSuppressesNoopEvents(t *testing.T) {
 	}
 	if len(output.events) != 0 {
 		t.Errorf("output events = %#v, want none", output.events)
+	}
+}
+
+func TestSimulatedKeyboardSendsChordActionAndConsumesTrigger(t *testing.T) {
+	t.Parallel()
+
+	output := newRecordingOutput()
+	keyboard := NewSimulatedKeyboard(
+		NewMappingsWithActions(nil, nil, map[uint16][]uint16{
+			0x41: {0x11, 0x43}, // A triggers Ctrl+C.
+		}),
+		output,
+	)
+
+	for _, event := range []Event{
+		{VirtualKey: 0x41},              // A
+		{VirtualKey: 0x41, KeyUp: true}, // A
+	} {
+		if handled, err := keyboard.Handle(event); !handled || err != nil {
+			t.Fatalf("handle %v = (%t, %v), want (true, nil)", event, handled, err)
+		}
+	}
+
+	want := []Event{
+		{VirtualKey: 0x11},              // Ctrl down
+		{VirtualKey: 0x43},              // C down
+		{VirtualKey: 0x43, KeyUp: true}, // C up
+		{VirtualKey: 0x11, KeyUp: true}, // Ctrl up
+	}
+	if !reflect.DeepEqual(output.events, want) {
+		t.Errorf("output events = %#v, want %#v", output.events, want)
+	}
+}
+
+func TestSimulatedKeyboardPassesThroughWhenSendKeysFails(t *testing.T) {
+	t.Parallel()
+
+	wantErr := errors.New("send event")
+	output := &recordingOutput{err: wantErr}
+	keyboard := NewSimulatedKeyboard(
+		NewMappingsWithActions(nil, nil, map[uint16][]uint16{0x41: {0x11}}), // A triggers Ctrl.
+		output,
+	)
+
+	handled, err := keyboard.Handle(Event{VirtualKey: 0x41}) // A
+	if handled || !errors.Is(err, wantErr) {
+		t.Fatalf("handle action = (%t, %v), want (false, %v)", handled, err, wantErr)
+	}
+	if handled, err := keyboard.Handle(Event{VirtualKey: 0x41, KeyUp: true}); handled || err != nil {
+		t.Fatalf("handle failed action release = (%t, %v), want (false, nil)", handled, err)
 	}
 }
 

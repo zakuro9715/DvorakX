@@ -20,10 +20,11 @@ type Config struct {
 	Source LayerConfig
 	Layers map[string]LayerConfig
 
-	// Remap and Noop are the resolved mappings kept for compatibility with
-	// callers that consumed the pre-structured Config representation.
-	Remap map[uint16]uint16
-	Noop  map[uint16]bool
+	// Remap, Noop, and SendKeys are the resolved mappings consumed by the
+	// keyboard backend.
+	Remap    map[uint16]uint16
+	Noop     map[uint16]bool
+	SendKeys map[uint16][]uint16
 }
 
 // MetaConfig contains settings from the [meta] table.
@@ -34,7 +35,7 @@ type MetaConfig struct {
 // LayerConfig contains a layer definition, actions, and direct remaps.
 type LayerConfig struct {
 	Definition Definition
-	Actions    map[string]Action
+	Actions    map[string]ActionSpec
 	Remaps     []map[string]string
 }
 
@@ -47,7 +48,7 @@ type Definition struct {
 type definitionToken struct {
 	value   string
 	escaped bool
-	action  Action
+	action  ActionSpec
 }
 
 // Action identifies a configured action.
@@ -56,7 +57,14 @@ type Action uint8
 const (
 	noAction Action = iota
 	NoopAction
+	SendKeysAction
 )
+
+// ActionSpec contains an action and its resolved key arguments.
+type ActionSpec struct {
+	Kind Action
+	Keys []uint16
+}
 
 type sourcePosition struct {
 	line        int
@@ -66,8 +74,8 @@ type sourcePosition struct {
 	sourceLines []string
 }
 
-func parseActions(value any, path string, positions sourcePositions, diagnostics *Diagnostics) map[string]Action {
-	actions := make(map[string]Action)
+func parseActions(value any, path string, positions sourcePositions, diagnostics *Diagnostics) map[string]ActionSpec {
+	actions := make(map[string]ActionSpec)
 	if value == nil {
 		return actions
 	}
@@ -82,30 +90,71 @@ func parseActions(value any, path string, positions sourcePositions, diagnostics
 			addDiagnostic(diagnostics, positions, path+"."+name, "action %q must contain exactly one action", name)
 			continue
 		}
-		args, ok := body["noop"]
-		if !ok {
+		switch {
+		case body["noop"] != nil:
+			arguments, ok := body["noop"].([]any)
+			if !ok || len(arguments) != 0 {
+				addDiagnostic(diagnostics, positions, path+"."+name+".noop", "noop action does not accept arguments")
+				continue
+			}
+			actions[name] = ActionSpec{Kind: NoopAction}
+		case body["send-keys"] != nil:
+			keys, ok := parseSendKeys(body["send-keys"], path+"."+name+".send-keys", positions, diagnostics)
+			if !ok {
+				continue
+			}
+			actions[name] = ActionSpec{Kind: SendKeysAction, Keys: keys}
+		default:
 			addDiagnostic(diagnostics, positions, path+"."+name, "unsupported action in %q", name)
-			continue
 		}
-		arguments, ok := args.([]any)
-		if !ok || len(arguments) != 0 {
-			addDiagnostic(diagnostics, positions, path+"."+name+".noop", "noop action does not accept arguments")
-			continue
-		}
-		actions[name] = NoopAction
 	}
 	return actions
 }
 
-func resolveAction(value string, actions map[string]Action) (Action, bool) {
+func parseSendKeys(value any, path string, positions sourcePositions, diagnostics *Diagnostics) ([]uint16, bool) {
+	var names []string
+	switch value := value.(type) {
+	case string:
+		names = strings.Fields(value)
+	case []any:
+		names = make([]string, len(value))
+		for index, item := range value {
+			name, ok := item.(string)
+			if !ok {
+				addDiagnostic(diagnostics, positions, fmt.Sprintf("%s[%d]", path, index), "send-keys argument at position %d must be a string", index)
+				return nil, false
+			}
+			names[index] = name
+		}
+	default:
+		addDiagnostic(diagnostics, positions, path, "send-keys must be a string or string array")
+		return nil, false
+	}
+	if len(names) == 0 {
+		addDiagnostic(diagnostics, positions, path, "send-keys must contain at least one key")
+		return nil, false
+	}
+	keys := make([]uint16, len(names))
+	for index, name := range names {
+		key, ok := virtualKey(name)
+		if !ok {
+			addDiagnostic(diagnostics, positions, fmt.Sprintf("%s[%d]", path, index), "unsupported send-keys key %q", name)
+			return nil, false
+		}
+		keys[index] = key
+	}
+	return keys, true
+}
+
+func resolveAction(value string, actions map[string]ActionSpec) (ActionSpec, bool) {
 	if !strings.HasPrefix(value, "@") || len(value) == 1 {
-		return noAction, false
+		return ActionSpec{}, false
 	}
 	action, ok := actions[value[1:]]
 	return action, ok
 }
 
-func resolveDefinitionActions(tokens []definitionToken, actions map[string]Action, path string, positions sourcePositions, diagnostics *Diagnostics) ([]definitionToken, bool) {
+func resolveDefinitionActions(tokens []definitionToken, actions map[string]ActionSpec, path string, positions sourcePositions, diagnostics *Diagnostics) ([]definitionToken, bool) {
 	valid := true
 	for index := range tokens {
 		if tokens[index].escaped || !strings.HasPrefix(tokens[index].value, "@") {
@@ -305,38 +354,47 @@ func Parse(data []byte) (Config, error) {
 	}
 
 	diagnostics := NewDiagnostics()
-	globalRemap, globalNoop := parseGlobal(raw, positions, diagnostics)
+	globalRemap, globalNoop, globalSendKeys := parseGlobal(raw, positions, diagnostics)
 
 	remap := make(map[uint16]uint16)
 	noop := make(map[uint16]bool)
-	hasLayers := resolveLayers(raw, remap, noop, positions, diagnostics)
+	sendKeys := make(map[uint16][]uint16)
+	hasLayers := resolveLayers(raw, remap, noop, sendKeys, positions, diagnostics)
 	if len(diagnostics.Items) != 0 {
 		return Config{}, diagnostics
 	}
-	if !hasLayers && len(globalRemap) == 0 && len(globalNoop) == 0 {
+	if !hasLayers && len(globalRemap) == 0 && len(globalNoop) == 0 && len(globalSendKeys) == 0 {
 		addDiagnostic(diagnostics, positions, "global", "config must define at least one [global].remaps entry")
 	}
 	for source, destination := range globalRemap {
 		remap[source] = destination
 		delete(noop, source)
+		delete(sendKeys, source)
 	}
 	for source := range globalNoop {
 		delete(remap, source)
+		delete(sendKeys, source)
 		noop[source] = true
 	}
-	if len(remap) == 0 && len(noop) == 0 {
+	for source, keys := range globalSendKeys {
+		delete(remap, source)
+		delete(noop, source)
+		sendKeys[source] = append([]uint16(nil), keys...)
+	}
+	if len(remap) == 0 && len(noop) == 0 && len(sendKeys) == 0 {
 		addDiagnostic(diagnostics, positions, "global.remaps", "config must define at least one mapping")
 	}
 	if len(diagnostics.Items) != 0 {
 		return Config{}, diagnostics
 	}
 	config := Config{
-		Meta:   captureMeta(raw),
-		Global: captureLayer(raw["global"]),
-		Source: captureLayer(raw["src"]),
-		Layers: make(map[string]LayerConfig),
-		Remap:  remap,
-		Noop:   noop,
+		Meta:     captureMeta(raw),
+		Global:   captureLayer(raw["global"]),
+		Source:   captureLayer(raw["src"]),
+		Layers:   make(map[string]LayerConfig),
+		Remap:    remap,
+		Noop:     noop,
+		SendKeys: sendKeys,
 	}
 	for name, value := range raw {
 		if name == "meta" || name == "global" || name == "src" {
@@ -356,7 +414,7 @@ func captureMeta(raw map[string]any) MetaConfig {
 func captureLayer(value any) LayerConfig {
 	table, _ := value.(map[string]any)
 	layer := LayerConfig{
-		Actions: make(map[string]Action),
+		Actions: make(map[string]ActionSpec),
 		Remaps:  make([]map[string]string, 0),
 	}
 	if table == nil {
@@ -385,16 +443,51 @@ func captureDefinition(value any) Definition {
 	}
 }
 
-func captureActions(value any) map[string]Action {
-	actions := make(map[string]Action)
+func captureActions(value any) map[string]ActionSpec {
+	actions := make(map[string]ActionSpec)
 	table, _ := value.(map[string]any)
 	for name, value := range table {
 		body, _ := value.(map[string]any)
 		if arguments, ok := body["noop"].([]any); ok && len(arguments) == 0 {
-			actions[name] = NoopAction
+			actions[name] = ActionSpec{Kind: NoopAction}
+			continue
+		}
+		if keys, ok := parseSendKeysForCapture(body["send-keys"]); ok {
+			actions[name] = ActionSpec{Kind: SendKeysAction, Keys: keys}
 		}
 	}
 	return actions
+}
+
+func parseSendKeysForCapture(value any) ([]uint16, bool) {
+	var names []string
+	switch value := value.(type) {
+	case string:
+		names = strings.Fields(value)
+	case []any:
+		names = make([]string, len(value))
+		for index, item := range value {
+			name, ok := item.(string)
+			if !ok {
+				return nil, false
+			}
+			names[index] = name
+		}
+	default:
+		return nil, false
+	}
+	if len(names) == 0 {
+		return nil, false
+	}
+	keys := make([]uint16, len(names))
+	for index, name := range names {
+		key, ok := virtualKey(name)
+		if !ok {
+			return nil, false
+		}
+		keys[index] = key
+	}
+	return keys, true
 }
 
 func captureRemaps(value any) []map[string]string {
@@ -423,7 +516,7 @@ func captureRemaps(value any) []map[string]string {
 }
 
 // ResolveMappings returns the mappings consumed by the keyboard backend.
-func (c Config) ResolveMappings() (map[uint16]uint16, map[uint16]bool) {
+func (c Config) ResolveMappings() (map[uint16]uint16, map[uint16]bool, map[uint16][]uint16) {
 	remap := make(map[uint16]uint16, len(c.Remap))
 	for source, destination := range c.Remap {
 		remap[source] = destination
@@ -432,7 +525,11 @@ func (c Config) ResolveMappings() (map[uint16]uint16, map[uint16]bool) {
 	for source, enabled := range c.Noop {
 		noop[source] = enabled
 	}
-	return remap, noop
+	sendKeys := make(map[uint16][]uint16, len(c.SendKeys))
+	for source, keys := range c.SendKeys {
+		sendKeys[source] = append([]uint16(nil), keys...)
+	}
+	return remap, noop, sendKeys
 }
 
 func addDiagnostic(e *Diagnostics, positions sourcePositions, path, format string, args ...any) {
@@ -450,18 +547,19 @@ func addDiagnostic(e *Diagnostics, positions sourcePositions, path, format strin
 	})
 }
 
-func parseGlobal(raw map[string]any, positions sourcePositions, diagnostics *Diagnostics) (map[uint16]uint16, map[uint16]bool) {
+func parseGlobal(raw map[string]any, positions sourcePositions, diagnostics *Diagnostics) (map[uint16]uint16, map[uint16]bool, map[uint16][]uint16) {
 	value, ok := raw["global"]
 	if !ok {
-		return map[uint16]uint16{}, map[uint16]bool{}
+		return map[uint16]uint16{}, map[uint16]bool{}, map[uint16][]uint16{}
 	}
 	table, ok := value.(map[string]any)
 	if !ok {
 		addDiagnostic(diagnostics, positions, "global", "[global] must be a TOML table")
-		return map[uint16]uint16{}, map[uint16]bool{}
+		return map[uint16]uint16{}, map[uint16]bool{}, map[uint16][]uint16{}
 	}
 	remap := make(map[uint16]uint16)
 	noop := make(map[uint16]bool)
+	sendKeys := make(map[uint16][]uint16)
 	actions := parseActions(table["actions"], "global.actions", positions, diagnostics)
 	for _, name := range sortedKeys(table) {
 		if name != "remaps" && name != "actions" {
@@ -471,27 +569,35 @@ func parseGlobal(raw map[string]any, positions sourcePositions, diagnostics *Dia
 
 	remapValue, ok := table["remaps"]
 	if !ok {
-		return remap, noop
+		return remap, noop, sendKeys
 	}
-	layerRemap, layerNoop := parseRemaps(remapValue, "global.remaps", actions, positions, diagnostics)
+	layerRemap, layerNoop, layerSendKeys := parseRemaps(remapValue, "global.remaps", actions, positions, diagnostics)
 	for source, destination := range layerRemap {
 		remap[source] = destination
 		delete(noop, source)
+		delete(sendKeys, source)
 	}
 	for source := range layerNoop {
 		delete(remap, source)
+		delete(sendKeys, source)
 		noop[source] = true
 	}
-	return remap, noop
+	for source, keys := range layerSendKeys {
+		delete(remap, source)
+		delete(noop, source)
+		sendKeys[source] = keys
+	}
+	return remap, noop, sendKeys
 }
 
-func parseRemaps(value any, path string, actions map[string]Action, positions sourcePositions, diagnostics *Diagnostics) (map[uint16]uint16, map[uint16]bool) {
+func parseRemaps(value any, path string, actions map[string]ActionSpec, positions sourcePositions, diagnostics *Diagnostics) (map[uint16]uint16, map[uint16]bool, map[uint16][]uint16) {
 	remap := make(map[uint16]uint16)
 	noop := make(map[uint16]bool)
+	sendKeys := make(map[uint16][]uint16)
 	displayPath := remapDisplayPath(path)
 	switch remaps := value.(type) {
 	case map[string]any:
-		mergeRemap(remap, noop, remaps, actions, positions, diagnostics, path)
+		mergeRemap(remap, noop, sendKeys, remaps, actions, positions, diagnostics, path)
 	case []any:
 		for index, value := range remaps {
 			entryPath := fmt.Sprintf("%s[%d]", path, index)
@@ -500,12 +606,12 @@ func parseRemaps(value any, path string, actions map[string]Action, positions so
 				addDiagnostic(diagnostics, positions, entryPath, "%s[%d] must be a TOML table", displayPath, index)
 				continue
 			}
-			mergeRemap(remap, noop, entries, actions, positions, diagnostics, entryPath)
+			mergeRemap(remap, noop, sendKeys, entries, actions, positions, diagnostics, entryPath)
 		}
 	default:
 		addDiagnostic(diagnostics, positions, path, "%s must be a TOML table or table array", displayPath)
 	}
-	return remap, noop
+	return remap, noop, sendKeys
 }
 
 func remapDisplayPath(path string) string {
@@ -516,7 +622,7 @@ func remapDisplayPath(path string) string {
 	return "[" + path[:separator] + "]" + path[separator:]
 }
 
-func mergeRemap(remap map[uint16]uint16, noop map[uint16]bool, entries map[string]any, actions map[string]Action, positions sourcePositions, diagnostics *Diagnostics, path string) {
+func mergeRemap(remap map[uint16]uint16, noop map[uint16]bool, sendKeys map[uint16][]uint16, entries map[string]any, actions map[string]ActionSpec, positions sourcePositions, diagnostics *Diagnostics, path string) {
 	for _, sourceName := range sortedKeysByPosition(entries, positions, path) {
 		value := entries[sourceName]
 		destinationName, ok := value.(string)
@@ -540,8 +646,11 @@ func mergeRemap(remap map[uint16]uint16, noop map[uint16]bool, entries map[strin
 				addDiagnostic(diagnostics, positions, path+"."+sourceName, "unsupported remap source key %q", unescapedSourceName)
 				continue
 			}
-			if action == NoopAction {
+			switch action.Kind {
+			case NoopAction:
 				noop[source] = true
+			case SendKeysAction:
+				sendKeys[source] = append([]uint16(nil), action.Keys...)
 			}
 			continue
 		}
@@ -564,7 +673,7 @@ func mergeRemap(remap map[uint16]uint16, noop map[uint16]bool, entries map[strin
 	}
 }
 
-func resolveLayers(raw map[string]any, remap map[uint16]uint16, noop map[uint16]bool, positions sourcePositions, diagnostics *Diagnostics) bool {
+func resolveLayers(raw map[string]any, remap map[uint16]uint16, noop map[uint16]bool, sendKeys map[uint16][]uint16, positions sourcePositions, diagnostics *Diagnostics) bool {
 	_, hasMeta := raw["meta"]
 	sourceValue, hasSource := raw["src"]
 	var layerNames []string
@@ -646,7 +755,7 @@ func resolveLayers(raw map[string]any, remap map[uint16]uint16, noop map[uint16]
 	}
 	layerTable, _ := layerValue.(map[string]any)
 	actions := parseActions(layerTable["actions"], defaultLayer+".actions", positions, diagnostics)
-	layerRemap, layerNoop := parseLayerRemaps(layerTable, defaultLayer, actions, positions, diagnostics)
+	layerRemap, layerNoop, layerSendKeys := parseLayerRemaps(layerTable, defaultLayer, actions, positions, diagnostics)
 	destination, destinationOK := parseDefinition(layerValue, "["+defaultLayer+"]", actions, positions, diagnostics)
 	if !sourceOK || !destinationOK {
 		return false
@@ -668,8 +777,12 @@ func resolveLayers(raw map[string]any, remap map[uint16]uint16, noop map[uint16]
 		if !destination[index].escaped && destination[index].value == "_" {
 			continue
 		}
-		if destination[index].action == NoopAction {
+		switch destination[index].action.Kind {
+		case NoopAction:
 			noop[sourceKey] = true
+			continue
+		case SendKeysAction:
+			sendKeys[sourceKey] = append([]uint16(nil), destination[index].action.Keys...)
 			continue
 		}
 		destinationKey, destinationOK := virtualKey(destination[index].value)
@@ -682,10 +795,17 @@ func resolveLayers(raw map[string]any, remap map[uint16]uint16, noop map[uint16]
 	for source, destination := range layerRemap {
 		remap[source] = destination
 		delete(noop, source)
+		delete(sendKeys, source)
 	}
 	for source := range layerNoop {
 		delete(remap, source)
+		delete(sendKeys, source)
 		noop[source] = true
+	}
+	for source, keys := range layerSendKeys {
+		delete(remap, source)
+		delete(noop, source)
+		sendKeys[source] = keys
 	}
 	return true
 }
@@ -701,15 +821,15 @@ func parseLayer(value any, layerName string, positions sourcePositions, diagnost
 	parseLayerRemaps(table, layerName, actions, positions, diagnostics)
 }
 
-func parseLayerRemaps(table map[string]any, layerName string, actions map[string]Action, positions sourcePositions, diagnostics *Diagnostics) (map[uint16]uint16, map[uint16]bool) {
+func parseLayerRemaps(table map[string]any, layerName string, actions map[string]ActionSpec, positions sourcePositions, diagnostics *Diagnostics) (map[uint16]uint16, map[uint16]bool, map[uint16][]uint16) {
 	value, ok := table["remaps"]
 	if !ok {
-		return map[uint16]uint16{}, map[uint16]bool{}
+		return map[uint16]uint16{}, map[uint16]bool{}, map[uint16][]uint16{}
 	}
 	return parseRemaps(value, layerName+".remaps", actions, positions, diagnostics)
 }
 
-func parseDefinition(value any, path string, actions map[string]Action, positions sourcePositions, diagnostics *Diagnostics) ([]definitionToken, bool) {
+func parseDefinition(value any, path string, actions map[string]ActionSpec, positions sourcePositions, diagnostics *Diagnostics) ([]definitionToken, bool) {
 	table, ok := value.(map[string]any)
 	if !ok {
 		addDiagnostic(diagnostics, positions, strings.Trim(path, "[]"), "%s must be a TOML table", path)
