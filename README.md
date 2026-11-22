@@ -25,6 +25,12 @@ events:
 .\dvorakv.exe --debug
 ```
 
+## Development
+
+```
+go tool lefthook install
+```
+
 ### Windows E2E test
 
 The keyboard-hook E2E test builds the executable, temporarily installs its

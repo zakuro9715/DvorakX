@@ -1,0 +1,8 @@
+assert_lefthook_installed: true
+# manual merge hook.
+# skip CI, local check.
+pre-merge-commit:
+  parallel: true
+  jobs:
+    - run: go vet ./...
+    - run: go test ./...
