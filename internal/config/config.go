@@ -71,7 +71,7 @@ type sourcePosition struct {
 	sourceLines []string
 }
 
-func parseActions(value any, path string, positions sourcePositions, diagnostics *Diagnostics) map[string]ActionSpec {
+func parseActions(value any, path string, positions sourcePositions, diagnostics *DiagnosticsError) map[string]ActionSpec {
 	actions := make(map[string]ActionSpec)
 	if value == nil {
 		return actions
@@ -108,7 +108,7 @@ func parseActions(value any, path string, positions sourcePositions, diagnostics
 	return actions
 }
 
-func parseSendKeys(value any, path string, positions sourcePositions, diagnostics *Diagnostics) ([]uint16, bool) {
+func parseSendKeys(value any, path string, positions sourcePositions, diagnostics *DiagnosticsError) ([]uint16, bool) {
 	var names []string
 	switch value := value.(type) {
 	case string:
@@ -151,7 +151,7 @@ func resolveAction(value string, actions map[string]ActionSpec) (ActionSpec, boo
 	return action, ok
 }
 
-func resolveDefinitionActions(tokens []definitionToken, actions map[string]ActionSpec, path string, positions sourcePositions, diagnostics *Diagnostics) ([]definitionToken, bool) {
+func resolveDefinitionActions(tokens []definitionToken, actions map[string]ActionSpec, path string, positions sourcePositions, diagnostics *DiagnosticsError) ([]definitionToken, bool) {
 	valid := true
 	for index := range tokens {
 		if tokens[index].escaped || !strings.HasPrefix(tokens[index].value, "@") {
@@ -330,7 +330,7 @@ func LoadFile(path string) (Config, error) {
 		return Config{}, fmt.Errorf("read config %q: %w", path, err)
 	}
 	loaded, err := Parse(data)
-	if diagnostics, ok := err.(*Diagnostics); ok {
+	if diagnostics, ok := errors.AsType[*DiagnosticsError](err); ok {
 		for index := range diagnostics.Items {
 			diagnostics.Items[index].Path = path
 		}
@@ -522,7 +522,7 @@ func captureRemaps(value any) []map[string]string {
 	return remaps
 }
 
-func addDiagnostic(e *Diagnostics, positions sourcePositions, path, format string, args ...any) {
+func addDiagnostic(e *DiagnosticsError, positions sourcePositions, path, format string, args ...any) {
 	position := positions[path]
 	if position.line == 0 {
 		position = sourcePosition{line: 1, column: 1}
@@ -537,7 +537,7 @@ func addDiagnostic(e *Diagnostics, positions sourcePositions, path, format strin
 	})
 }
 
-func parseGlobal(raw map[string]any, positions sourcePositions, diagnostics *Diagnostics) (map[uint16]uint16, map[uint16]bool, map[uint16][]uint16) {
+func parseGlobal(raw map[string]any, positions sourcePositions, diagnostics *DiagnosticsError) (map[uint16]uint16, map[uint16]bool, map[uint16][]uint16) {
 	value, ok := raw["global"]
 	if !ok {
 		return map[uint16]uint16{}, map[uint16]bool{}, map[uint16][]uint16{}
@@ -580,7 +580,7 @@ func parseGlobal(raw map[string]any, positions sourcePositions, diagnostics *Dia
 	return remap, noop, sendKeys
 }
 
-func parseRemaps(value any, path string, actions map[string]ActionSpec, positions sourcePositions, diagnostics *Diagnostics) (map[uint16]uint16, map[uint16]bool, map[uint16][]uint16) {
+func parseRemaps(value any, path string, actions map[string]ActionSpec, positions sourcePositions, diagnostics *DiagnosticsError) (map[uint16]uint16, map[uint16]bool, map[uint16][]uint16) {
 	remap := make(map[uint16]uint16)
 	noop := make(map[uint16]bool)
 	sendKeys := make(map[uint16][]uint16)
@@ -612,7 +612,7 @@ func remapDisplayPath(path string) string {
 	return "[" + path[:separator] + "]" + path[separator:]
 }
 
-func mergeRemap(remap map[uint16]uint16, noop map[uint16]bool, sendKeys map[uint16][]uint16, entries map[string]any, actions map[string]ActionSpec, positions sourcePositions, diagnostics *Diagnostics, path string) {
+func mergeRemap(remap map[uint16]uint16, noop map[uint16]bool, sendKeys map[uint16][]uint16, entries map[string]any, actions map[string]ActionSpec, positions sourcePositions, diagnostics *DiagnosticsError, path string) {
 	for _, sourceName := range sortedKeysByPosition(entries, positions, path) {
 		value := entries[sourceName]
 		destinationName, ok := value.(string)
@@ -663,7 +663,7 @@ func mergeRemap(remap map[uint16]uint16, noop map[uint16]bool, sendKeys map[uint
 	}
 }
 
-func resolveLayers(raw map[string]any, remap map[uint16]uint16, noop map[uint16]bool, sendKeys map[uint16][]uint16, positions sourcePositions, diagnostics *Diagnostics) bool {
+func resolveLayers(raw map[string]any, remap map[uint16]uint16, noop map[uint16]bool, sendKeys map[uint16][]uint16, positions sourcePositions, diagnostics *DiagnosticsError) bool {
 	_, hasMeta := raw["meta"]
 	sourceValue, hasSource := raw["src"]
 	var layerNames []string
@@ -800,7 +800,7 @@ func resolveLayers(raw map[string]any, remap map[uint16]uint16, noop map[uint16]
 	return true
 }
 
-func parseLayer(value any, layerName string, positions sourcePositions, diagnostics *Diagnostics) {
+func parseLayer(value any, layerName string, positions sourcePositions, diagnostics *DiagnosticsError) {
 	table, ok := value.(map[string]any)
 	if !ok {
 		parseDefinition(value, "["+layerName+"]", nil, positions, diagnostics)
@@ -811,7 +811,7 @@ func parseLayer(value any, layerName string, positions sourcePositions, diagnost
 	parseLayerRemaps(table, layerName, actions, positions, diagnostics)
 }
 
-func parseLayerRemaps(table map[string]any, layerName string, actions map[string]ActionSpec, positions sourcePositions, diagnostics *Diagnostics) (map[uint16]uint16, map[uint16]bool, map[uint16][]uint16) {
+func parseLayerRemaps(table map[string]any, layerName string, actions map[string]ActionSpec, positions sourcePositions, diagnostics *DiagnosticsError) (map[uint16]uint16, map[uint16]bool, map[uint16][]uint16) {
 	value, ok := table["remaps"]
 	if !ok {
 		return map[uint16]uint16{}, map[uint16]bool{}, map[uint16][]uint16{}
@@ -819,7 +819,7 @@ func parseLayerRemaps(table map[string]any, layerName string, actions map[string
 	return parseRemaps(value, layerName+".remaps", actions, positions, diagnostics)
 }
 
-func parseDefinition(value any, path string, actions map[string]ActionSpec, positions sourcePositions, diagnostics *Diagnostics) ([]definitionToken, bool) {
+func parseDefinition(value any, path string, actions map[string]ActionSpec, positions sourcePositions, diagnostics *DiagnosticsError) ([]definitionToken, bool) {
 	table, ok := value.(map[string]any)
 	if !ok {
 		addDiagnostic(diagnostics, positions, strings.Trim(path, "[]"), "%s must be a TOML table", path)

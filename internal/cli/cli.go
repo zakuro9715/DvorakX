@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/signal"
@@ -139,7 +140,7 @@ func watchConfig(path, displayPath string, mappings *keyboard.Mappings, stop <-c
 
 func loadConfig(path, displayPath string) (config.Config, error) {
 	loaded, err := config.LoadFile(path)
-	if diagnostics, ok := err.(*config.Diagnostics); ok && displayPath != "" {
+	if diagnostics, ok := errors.AsType[*config.DiagnosticsError](err); ok && displayPath != "" {
 		for index := range diagnostics.Items {
 			diagnostics.Items[index].Path = displayPath
 		}
@@ -151,7 +152,7 @@ func formatConfigError(operation, path string, err error, colors ...bool) string
 	color := len(colors) > 0 && colors[0]
 	formatter := config.PrettyFormatter{Color: color}
 	var output strings.Builder
-	if diagnostics, ok := err.(*config.Diagnostics); ok {
+	if diagnostics, ok := errors.AsType[*config.DiagnosticsError](err); ok {
 		fmt.Fprintf(&output, "dvorakv: %s config %q:\n", operation, path)
 		_ = formatter.FormatTo(&output, diagnostics.Items)
 		return output.String()

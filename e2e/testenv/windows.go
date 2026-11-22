@@ -5,6 +5,7 @@ package testenv
 
 import (
 	"bufio"
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -231,11 +232,11 @@ func stopRemapper(t *testing.T, command *exec.Cmd) {
 	if command.Process == nil {
 		return
 	}
-	if err := command.Process.Kill(); err != nil && err != os.ErrProcessDone {
+	if err := command.Process.Kill(); err != nil && !errors.Is(err, os.ErrProcessDone) {
 		t.Errorf("stop remapper: %v", err)
 	}
 	if err := command.Wait(); err != nil {
-		if _, ok := err.(*exec.ExitError); !ok {
+		if _, ok := errors.AsType[*exec.ExitError](err); !ok {
 			t.Errorf("wait for remapper: %v", err)
 		}
 	}
@@ -282,7 +283,7 @@ func windowText(t *testing.T, window uintptr) string {
 		uintptr(unsafe.Pointer(&buffer[0])),
 		uintptr(len(buffer)),
 	)
-	if length == 0 && err != syscall.Errno(0) {
+	if length == 0 && !errors.Is(err, syscall.Errno(0)) {
 		t.Fatalf("read receiver text: %v", err)
 	}
 	return syscall.UTF16ToString(buffer)

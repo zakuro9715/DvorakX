@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -24,7 +25,7 @@ func exitf(format string, args ...any) {
 func formatError(err error) string {
 	formatter := config.PrettyFormatter{Color: colorOutput(os.Stderr)}
 	var output strings.Builder
-	if diagnosticList, ok := err.(*config.Diagnostics); ok {
+	if diagnosticList, ok := errors.AsType[*config.DiagnosticsError](err); ok {
 		_ = formatter.FormatTo(&output, diagnosticList.Items)
 		return output.String()
 	}

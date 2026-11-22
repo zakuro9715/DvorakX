@@ -55,9 +55,9 @@ func TestRunReturnsAllConfigurationDiagnostics(t *testing.T) {
 	if err == nil {
 		t.Fatal("Run() error = nil, want configuration diagnostics")
 	}
-	diagnostics, ok := err.(*config.Diagnostics)
+	diagnostics, ok := errors.AsType[*config.DiagnosticsError](err)
 	if !ok {
-		t.Fatalf("Run() error type = %T, want *errors.Diagnostics", err)
+		t.Fatalf("Run() error type = %T, want *errors.DiagnosticsError", err)
 	}
 	for _, want := range []string{
 		`unsupported [global] field "hotkeys"`,
@@ -83,7 +83,7 @@ func TestLoadConfigUsesSeparateDisplayPath(t *testing.T) {
 	}
 
 	_, err := loadConfig(configPath, "config.toml")
-	diagnostics, ok := err.(*config.Diagnostics)
+	diagnostics, ok := errors.AsType[*config.DiagnosticsError](err)
 	if !ok || len(diagnostics.Items) != 1 {
 		t.Fatalf("loadConfig() error = %v, want one diagnostic", err)
 	}

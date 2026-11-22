@@ -13,21 +13,21 @@ type Error struct {
 	Message     string
 }
 
-// Diagnostics collects structured configuration errors.
-type Diagnostics struct {
+// DiagnosticsError collects structured configuration errors.
+type DiagnosticsError struct {
 	Items []Error
 }
 
 // NewDiagnostics creates an empty diagnostics collection.
-func NewDiagnostics() *Diagnostics {
-	return &Diagnostics{}
+func NewDiagnostics() *DiagnosticsError {
+	return &DiagnosticsError{}
 }
 
 // Add appends an error to the collection.
-func (e *Diagnostics) Add(err Error) {
+func (e *DiagnosticsError) Add(err Error) {
 	e.Items = append(e.Items, err)
 }
 
-func (e *Diagnostics) Error() string {
+func (e *DiagnosticsError) Error() string {
 	return fmt.Sprintf("there are %d configuration errors", len(e.Items))
 }

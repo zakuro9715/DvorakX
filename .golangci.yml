@@ -6,8 +6,8 @@ linters:
     - bidichk
     - dupl
     - errcheck
-    # - errname
-    # - errorlint
+    - errname
+    - errorlint
     # - exhaustive
     # - forbidigo   # Forbid print()
     - gocheckcompilerdirectives
