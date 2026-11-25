@@ -17,33 +17,33 @@ type Mappings struct {
 
 // MappingStage is one ordered step in keyboard processing.
 type MappingStage struct {
-	Mappings map[uint16]StageMapping
+	Mappings map[keys.Key]StageMapping
 }
 
 // StageMapping describes a transformation in one mapping stage.
 type StageMapping struct {
-	Destination uint16
+	Destination keys.Key
 	Noop        bool
-	SendKeys    []uint16
+	SendKeys    []keys.Key
 	Passthrough bool
 }
 
 // Mapping describes the destination or action for a source key.
 type Mapping struct {
-	Destination uint16
+	Destination keys.Key
 	Noop        bool
-	SendKeys    []uint16
+	SendKeys    []keys.Key
 }
 
 // NewMappings creates mappings initialized with remap.
-func NewMappings(remap map[uint16]uint16) *Mappings {
+func NewMappings(remap map[keys.Key]keys.Key) *Mappings {
 	mappings := new(Mappings)
 	mappings.Replace(remap)
 	return mappings
 }
 
 // NewMappingsWithActions creates mappings initialized with remaps and actions.
-func NewMappingsWithActions(remap map[uint16]uint16, noop map[uint16]bool, sendKeys map[uint16][]uint16) *Mappings {
+func NewMappingsWithActions(remap map[keys.Key]keys.Key, noop map[keys.Key]bool, sendKeys map[keys.Key][]keys.Key) *Mappings {
 	mappings := new(Mappings)
 	mappings.ReplaceWithActions(remap, noop, sendKeys)
 	return mappings
@@ -64,7 +64,7 @@ func NewMappingsFromConfig(loaded config.Config) (*Mappings, error) {
 func (m *Mappings) ReplaceStages(stages []MappingStage) {
 	copyStages := make([]MappingStage, len(stages))
 	for index, stage := range stages {
-		mappings := make(map[uint16]StageMapping, len(stage.Mappings))
+		mappings := make(map[keys.Key]StageMapping, len(stage.Mappings))
 		for source, mapping := range stage.Mappings {
 			mapping.SendKeys = slices.Clone(mapping.SendKeys)
 			mappings[source] = mapping
@@ -85,9 +85,9 @@ func (m *Mappings) ReplaceConfig(loaded config.Config) error {
 }
 
 // Load returns the current immutable key map.
-func (m *Mappings) Load() map[uint16]uint16 {
+func (m *Mappings) Load() map[keys.Key]keys.Key {
 	if stages, ok := m.value.Load().([]MappingStage); ok {
-		remap := make(map[uint16]uint16)
+		remap := make(map[keys.Key]keys.Key)
 		for source, mapping := range flattenStages(stages) {
 			if !mapping.Noop && len(mapping.SendKeys) == 0 {
 				remap[source] = mapping.Destination
@@ -95,8 +95,8 @@ func (m *Mappings) Load() map[uint16]uint16 {
 		}
 		return remap
 	}
-	mappings := m.value.Load().(map[uint16]Mapping)
-	remap := make(map[uint16]uint16, len(mappings))
+	mappings := m.value.Load().(map[keys.Key]Mapping)
+	remap := make(map[keys.Key]keys.Key, len(mappings))
 	for source, mapping := range mappings {
 		if !mapping.Noop && len(mapping.SendKeys) == 0 {
 			remap[source] = mapping.Destination
@@ -105,15 +105,15 @@ func (m *Mappings) Load() map[uint16]uint16 {
 	return remap
 }
 
-func flattenStages(stages []MappingStage) map[uint16]Mapping {
-	keys := make(map[uint16]struct{})
+func flattenStages(stages []MappingStage) map[keys.Key]Mapping {
+	keySet := make(map[keys.Key]struct{})
 	for _, stage := range stages {
 		for source := range stage.Mappings {
-			keys[source] = struct{}{}
+			keySet[source] = struct{}{}
 		}
 	}
-	flattened := make(map[uint16]Mapping, len(keys))
-	for source := range keys {
+	flattened := make(map[keys.Key]Mapping, len(keySet))
+	for source := range keySet {
 		if mapping, ok := resolveStages(source, stages); ok {
 			flattened[source] = mapping
 		}
@@ -122,13 +122,13 @@ func flattenStages(stages []MappingStage) map[uint16]Mapping {
 }
 
 // Replace atomically installs a copy of remap.
-func (m *Mappings) Replace(remap map[uint16]uint16) {
+func (m *Mappings) Replace(remap map[keys.Key]keys.Key) {
 	m.ReplaceWithActions(remap, nil, nil)
 }
 
 // ReplaceWithActions atomically installs remaps and actions.
-func (m *Mappings) ReplaceWithActions(remap map[uint16]uint16, noop map[uint16]bool, sendKeys map[uint16][]uint16) {
-	copy := make(map[uint16]Mapping, len(remap)+len(noop)+len(sendKeys))
+func (m *Mappings) ReplaceWithActions(remap map[keys.Key]keys.Key, noop map[keys.Key]bool, sendKeys map[keys.Key][]keys.Key) {
+	copy := make(map[keys.Key]Mapping, len(remap)+len(noop)+len(sendKeys))
 	for source, destination := range remap {
 		copy[source] = Mapping{Destination: destination}
 	}
@@ -141,8 +141,8 @@ func (m *Mappings) ReplaceWithActions(remap map[uint16]uint16, noop map[uint16]b
 	m.value.Store(copy)
 }
 
-func (m *Mappings) lookup(key uint16) (Mapping, bool) {
-	mappings, ok := m.value.Load().(map[uint16]Mapping)
+func (m *Mappings) lookup(key keys.Key) (Mapping, bool) {
+	mappings, ok := m.value.Load().(map[keys.Key]Mapping)
 	if !ok {
 		return Mapping{}, false
 	}
@@ -177,7 +177,7 @@ func stagesFromConfig(loaded config.Config) ([]MappingStage, error) {
 	if len(source) != len(destination) {
 		return nil, fmt.Errorf("source and default layer definitions have different lengths: %d and %d", len(source), len(destination))
 	}
-	definition := MappingStage{Mappings: make(map[uint16]StageMapping, len(source))}
+	definition := MappingStage{Mappings: make(map[keys.Key]StageMapping, len(source))}
 	for index, sourceName := range source {
 		sourceName, err := config.UnescapeKeyName(sourceName)
 		if err != nil {
@@ -211,7 +211,7 @@ func stagesFromConfig(loaded config.Config) ([]MappingStage, error) {
 }
 
 func remapStage(layer config.LayerConfig) MappingStage {
-	stage := MappingStage{Mappings: make(map[uint16]StageMapping)}
+	stage := MappingStage{Mappings: make(map[keys.Key]StageMapping)}
 	for _, entries := range layer.Remaps {
 		for sourceName, destinationName := range entries {
 			sourceName, sourceErr := config.UnescapeKeyName(sourceName)

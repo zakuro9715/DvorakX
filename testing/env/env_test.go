@@ -15,9 +15,9 @@ remaps = { a = "b", "0" = "c" }
 `).
 		Simulate(`
 # ordinary keys expand to down and up
-a 0x30:down 0x30:up
+a 0x0B:down 0x0B:up
 `).
-		Expect("b 0x43:down 0x43:up")
+		Expect("b c:down c:up")
 }
 
 func TestEnvironmentSimulatesActions(t *testing.T) {

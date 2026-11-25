@@ -1,11 +1,15 @@
 package keyboard
 
-import "slices"
+import (
+	"slices"
 
-// Event is an OS-independent virtual key event.
+	"github.com/zakuro9715/DvorakZ/internal/keys"
+)
+
+// Event is an OS-independent scan code event.
 type Event struct {
-	VirtualKey uint16
-	KeyUp      bool
+	Key   keys.Key
+	KeyUp bool
 }
 
 // Output emits simulated key events.
@@ -17,7 +21,7 @@ type Output interface {
 type SimulatedKeyboard struct {
 	mappings *Mappings
 	output   Output
-	pressed  map[uint16]Mapping
+	pressed  map[keys.Key]Mapping
 }
 
 // NewSimulatedKeyboard creates a simulated keyboard backed by mappings.
@@ -25,7 +29,7 @@ func NewSimulatedKeyboard(mappings *Mappings, output Output) *SimulatedKeyboard 
 	return &SimulatedKeyboard{
 		mappings: mappings,
 		output:   output,
-		pressed:  make(map[uint16]Mapping),
+		pressed:  make(map[keys.Key]Mapping),
 	}
 }
 
@@ -47,13 +51,13 @@ func (k *SimulatedKeyboard) Handle(event Event) (bool, error) {
 			return true, nil
 		}
 		if err := k.sendKeys(mapping.SendKeys); err != nil {
-			delete(k.pressed, event.VirtualKey)
+			delete(k.pressed, event.Key)
 			return false, err
 		}
 		return true, nil
 	}
 
-	if err := k.output.Send(Event{VirtualKey: mapping.Destination, KeyUp: event.KeyUp}); err != nil {
+	if err := k.output.Send(Event{Key: mapping.Destination, KeyUp: event.KeyUp}); err != nil {
 		return false, err
 	}
 	return true, nil
@@ -61,30 +65,30 @@ func (k *SimulatedKeyboard) Handle(event Event) (bool, error) {
 
 func (k *SimulatedKeyboard) mapping(event Event) (Mapping, bool) {
 	if event.KeyUp {
-		mapping, ok := k.pressed[event.VirtualKey]
+		mapping, ok := k.pressed[event.Key]
 		if !ok {
 			return Mapping{}, false
 		}
-		delete(k.pressed, event.VirtualKey)
+		delete(k.pressed, event.Key)
 		return mapping, true
 	}
 
-	if mapping, ok := k.pressed[event.VirtualKey]; ok {
+	if mapping, ok := k.pressed[event.Key]; ok {
 		return mapping, true
 	}
 
-	mapping, ok := k.mappings.lookup(event.VirtualKey)
+	mapping, ok := k.mappings.lookup(event.Key)
 	if stages, stagesOK := k.mappings.lookupStages(); stagesOK {
-		mapping, ok = resolveStages(event.VirtualKey, stages)
+		mapping, ok = resolveStages(event.Key, stages)
 	}
 	if !ok {
 		return Mapping{}, false
 	}
-	k.pressed[event.VirtualKey] = mapping
+	k.pressed[event.Key] = mapping
 	return mapping, true
 }
 
-func resolveStages(key uint16, stages []MappingStage) (Mapping, bool) {
+func resolveStages(key keys.Key, stages []MappingStage) (Mapping, bool) {
 	current := key
 	matched := false
 	for _, stage := range stages {
@@ -97,7 +101,7 @@ func resolveStages(key uint16, stages []MappingStage) (Mapping, bool) {
 			return Mapping{Noop: true}, true
 		}
 		if len(mapping.SendKeys) != 0 {
-			return Mapping{SendKeys: append([]uint16(nil), mapping.SendKeys...)}, true
+			return Mapping{SendKeys: slices.Clone(mapping.SendKeys)}, true
 		}
 		current = mapping.Destination
 	}
@@ -107,35 +111,34 @@ func resolveStages(key uint16, stages []MappingStage) (Mapping, bool) {
 	return Mapping{Destination: current}, true
 }
 
-func (k *SimulatedKeyboard) sendKeys(keys []uint16) error {
-	held := make([]uint16, 0, len(keys))
-	for _, key := range keys {
+func (k *SimulatedKeyboard) sendKeys(sendKeys []keys.Key) error {
+	held := make([]keys.Key, 0, len(sendKeys))
+	for _, key := range sendKeys {
 		if isModifier(key) {
-			if err := k.output.Send(Event{VirtualKey: key}); err != nil {
+			if err := k.output.Send(Event{Key: key}); err != nil {
 				return err
 			}
 			held = append(held, key)
 			continue
 		}
-		if err := k.output.Send(Event{VirtualKey: key}); err != nil {
+		if err := k.output.Send(Event{Key: key}); err != nil {
 			return err
 		}
-		if err := k.output.Send(Event{VirtualKey: key, KeyUp: true}); err != nil {
+		if err := k.output.Send(Event{Key: key, KeyUp: true}); err != nil {
 			return err
 		}
 	}
 	for _, key := range slices.Backward(held) {
-		if err := k.output.Send(Event{VirtualKey: key, KeyUp: true}); err != nil {
+		if err := k.output.Send(Event{Key: key, KeyUp: true}); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func isModifier(key uint16) bool {
-	switch key {
-	case 0x10, 0x11, 0x12, 0x5B, 0x5C, // Shift, Ctrl, Alt, Left/Right Win
-		0xA0, 0xA1, 0xA2, 0xA3, 0xA4, 0xA5: // Left/Right Shift/Ctrl/Alt
+func isModifier(key keys.Key) bool {
+	switch key.ScanCode {
+	case 0x1D, 0x2A, 0x36, 0x38, 0x5B, 0x5C: // Ctrl, Shift, Alt, Left/Right Win
 		return true
 	default:
 		return false

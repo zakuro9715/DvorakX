@@ -13,6 +13,7 @@ import (
 
 	"github.com/zakuro9715/DvorakZ/internal/config"
 	"github.com/zakuro9715/DvorakZ/internal/keyboard"
+	"github.com/zakuro9715/DvorakZ/internal/keys"
 	"github.com/zakuro9715/DvorakZ/testing/diff"
 )
 
@@ -187,7 +188,7 @@ func formatEvents(events, sourceEvents []keyboard.Event, sourceTokens []string) 
 		}
 
 		event := events[index]
-		key := formatKey(event.VirtualKey)
+		key := formatKey(event.Key)
 		length := eventTokenLength(events, index)
 		switch {
 		case length == 2:
@@ -205,36 +206,38 @@ func formatEvents(events, sourceEvents []keyboard.Event, sourceTokens []string) 
 func eventTokenLength(events []keyboard.Event, index int) int {
 	if index+1 < len(events) &&
 		!events[index].KeyUp &&
-		events[index+1].VirtualKey == events[index].VirtualKey &&
+		events[index+1].Key == events[index].Key &&
 		events[index+1].KeyUp {
 		return 2
 	}
 	return 1
 }
 
-func formatKey(key uint16) string {
-	switch {
-	case key >= 'A' && key <= 'Z':
-		return string(rune(key + ('a' - 'A')))
-	case key >= '0' && key <= '9':
-		return string(rune(key))
-	case key == 0x11:
+func formatKey(key keys.Key) string {
+	if name := keys.Name(key); name != "" {
+		return name
+	}
+	if key.Extended {
+		return fmt.Sprintf("0xE0%02X", key.ScanCode)
+	}
+	switch key.ScanCode {
+	case 0x1D:
 		return "ctrl"
-	case key == 0x12:
+	case 0x38:
 		return "alt"
-	case key == 0x10:
+	case 0x2A, 0x36:
 		return "shift"
-	case key == 0x14:
+	case 0x3A:
 		return "caps"
-	case key == 0x1B:
+	case 0x01:
 		return "esc"
-	case key == 0x09:
+	case 0x0F:
 		return "tab"
-	case key == 0x0D:
+	case 0x1C:
 		return "enter"
-	case key == 0x20:
+	case 0x39:
 		return "space"
 	default:
-		return fmt.Sprintf("0x%X", key)
+		return fmt.Sprintf("0x%X", key.ScanCode)
 	}
 }

@@ -21,8 +21,10 @@ import (
 )
 
 const (
-	inputKeyboard = 1
-	keyEventKeyUp = 0x0002
+	inputKeyboard    = 1
+	keyEventKeyUp    = 0x0002
+	keyEventScanCode = 0x0008
+	keyEventExtended = 0x0001
 
 	wsOverlappedWindow = 0x00CF0000
 	wsVisible          = 0x10000000
@@ -47,11 +49,10 @@ var (
 )
 
 type keyboardInput struct {
-	virtualKey uint16
-	scanCode   uint16
-	flags      uint32
-	time       uint32
-	extraInfo  uintptr
+	scanCode  uint16
+	flags     uint32
+	time      uint32
+	extraInfo uintptr
 }
 
 type input struct {
@@ -116,7 +117,7 @@ func (environment *Environment) AssertShiftedKey(source, want string) {
 func (environment *Environment) assertKey(source, want string, shifted bool) {
 	environment.t.Helper()
 
-	virtualKey := virtualKey(environment.t, source)
+	scanKey := scanKey(environment.t, source)
 	empty, err := syscall.UTF16PtrFromString("")
 	if err != nil {
 		environment.t.Fatalf("encode empty receiver text: %v", err)
@@ -125,12 +126,12 @@ func (environment *Environment) assertKey(source, want string, shifted bool) {
 		environment.t.Fatalf("clear receiver text: %v", err)
 	}
 	if shifted {
-		sendKey(environment.t, keys.VKShift, false)
+		sendKey(environment.t, keys.Key{ScanCode: keys.Lshift}, false)
 	}
-	sendKey(environment.t, virtualKey, false)
-	sendKey(environment.t, virtualKey, true)
+	sendKey(environment.t, scanKey, false)
+	sendKey(environment.t, scanKey, true)
 	if shifted {
-		sendKey(environment.t, keys.VKShift, true)
+		sendKey(environment.t, keys.Key{ScanCode: keys.Lshift}, true)
 	}
 
 	deadline := time.Now().Add(2 * time.Second)
@@ -242,20 +243,23 @@ func stopRemapper(t *testing.T, command *exec.Cmd) {
 	}
 }
 
-func sendKey(t *testing.T, virtualKey uint16, keyUp bool) {
+func sendKey(t *testing.T, key keys.Key, keyUp bool) {
 	t.Helper()
 
-	flags := uint32(0)
+	flags := uint32(keyEventScanCode)
+	if key.Extended {
+		flags |= keyEventExtended
+	}
 	if keyUp {
-		flags = keyEventKeyUp
+		flags |= keyEventKeyUp
 	}
 	event := input{
 		inputType: inputKeyboard,
-		keyboard:  keyboardInput{virtualKey: virtualKey, flags: flags},
+		keyboard:  keyboardInput{scanCode: key.ScanCode, flags: flags},
 	}
 	sent, _, err := procSendInput.Call(1, uintptr(unsafe.Pointer(&event)), unsafe.Sizeof(event))
 	if sent != 1 {
-		t.Fatalf("send key %#x (up=%t): %v", virtualKey, keyUp, err)
+		t.Fatalf("send key %#x (up=%t): %v", key.ScanCode, keyUp, err)
 	}
 }
 
@@ -289,7 +293,7 @@ func windowText(t *testing.T, window uintptr) string {
 	return syscall.UTF16ToString(buffer)
 }
 
-func virtualKey(t *testing.T, name string) uint16 {
+func scanKey(t *testing.T, name string) keys.Key {
 	t.Helper()
 	key, ok := keys.Lookup(name)
 	if !ok {
