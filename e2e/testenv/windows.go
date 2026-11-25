@@ -126,12 +126,12 @@ func (environment *Environment) assertKey(source, want string, shifted bool) {
 		environment.t.Fatalf("clear receiver text: %v", err)
 	}
 	if shifted {
-		sendKey(environment.t, keys.Key{ScanCode: keys.Lshift}, false)
+		sendKey(environment.t, keys.Key{ScanCode: keys.LeftShift}, false)
 	}
 	sendKey(environment.t, scanKey, false)
 	sendKey(environment.t, scanKey, true)
 	if shifted {
-		sendKey(environment.t, keys.Key{ScanCode: keys.Lshift}, true)
+		sendKey(environment.t, keys.Key{ScanCode: keys.LeftShift}, true)
 	}
 
 	deadline := time.Now().Add(2 * time.Second)
