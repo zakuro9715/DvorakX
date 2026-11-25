@@ -135,6 +135,7 @@ func TestNameNamedKeys(t *testing.T) {
 		{key: Key{ScanCode: F24}, want: "f24"},
 		{key: Key{ScanCode: NumLock}, want: "numlock"},
 		{key: Key{ScanCode: NumpadMultiply}, want: "kp*"},
+		{key: Key{ScanCode: RightShift}, want: "rshift"},
 		{key: Key{ScanCode: Home, Extended: true}, want: "home"},
 		{key: Key{ScanCode: PageDown, Extended: true}, want: "pgdn"},
 		{key: Key{ScanCode: Delete, Extended: true}, want: "del"},

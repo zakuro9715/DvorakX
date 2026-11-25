@@ -280,6 +280,7 @@ var canonical = map[Key]string{
 	{ScanCode: Muhenkan}:      "muhenkan",
 	{ScanCode: Yen}:           "yen",
 
+	{ScanCode: RightShift}:                  "rshift",
 	{ScanCode: LeftCtrl, Extended: true}:    "rctl",
 	{ScanCode: RightAlt, Extended: true}:    "ralt",
 	{ScanCode: LeftWin, Extended: true}:     "lmet",
