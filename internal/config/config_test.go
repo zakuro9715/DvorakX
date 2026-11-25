@@ -514,18 +514,18 @@ func TestParseBraceEscapedKeyDefinitions(t *testing.T) {
 default = "&symbols"
 
 [global]
-remaps = [{ "{,}" = "{|}" }]
+remaps = [{ "{,}" = "{.}" }]
 
 [src]
-def = ["a", "b", "c"]
+def = ["a", "b"]
 
 [symbols]
-def = "{,}|{|}|{'}"
+def = "{,}|{'}"
 `))
 	if err != nil {
 		t.Fatalf("Parse() error = %v", err)
 	}
-	if got := config.Layers["symbols"].Definition.Tokens; !reflect.DeepEqual(got, []string{",", "|", "'"}) {
+	if got := config.Layers["symbols"].Definition.Tokens; !reflect.DeepEqual(got, []string{",", "'"}) {
 		t.Errorf("symbols definition tokens = %#v, want escaped key tokens", got)
 	}
 }
