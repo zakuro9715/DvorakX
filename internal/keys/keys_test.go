@@ -5,24 +5,25 @@ import "testing"
 func TestLookup(t *testing.T) {
 	tests := []struct {
 		name string
-		want uint16
+		want Key
 	}{
-		{name: "A", want: VKA},
-		{name: "ctrl", want: VKControl},
-		{name: "ENTER", want: VKReturn},
-		{name: "{", want: 0},
+		{name: "A", want: Key{ScanCode: 0x1E}},
+		{name: "ctrl", want: Key{ScanCode: 0x1D}},
+		{name: "rctl", want: Key{ScanCode: 0x1D, Extended: true}},
+		{name: "ENTER", want: Key{ScanCode: 0x1C}},
+		{name: "{", want: Key{}},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			got, ok := Lookup(test.name)
-			if test.want == 0 {
+			if test.want == (Key{}) {
 				if ok {
-					t.Fatalf("Lookup(%q) = %#x, want unknown", test.name, got)
+					t.Fatalf("Lookup(%q) = %#v, want unknown", test.name, got)
 				}
 				return
 			}
 			if !ok || got != test.want {
-				t.Fatalf("Lookup(%q) = (%#x, %t), want (%#x, true)", test.name, got, ok, test.want)
+				t.Fatalf("Lookup(%q) = (%#v, %t), want (%#v, true)", test.name, got, ok, test.want)
 			}
 		})
 	}

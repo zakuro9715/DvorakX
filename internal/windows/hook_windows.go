@@ -10,6 +10,7 @@ import (
 	"unsafe"
 
 	"github.com/zakuro9715/DvorakZ/internal/keyboard"
+	"github.com/zakuro9715/DvorakZ/internal/keys"
 )
 
 const (
@@ -18,6 +19,7 @@ const (
 	wmQuit = 0x0012
 
 	inputKeyboard        = 1
+	keyeventfScancode    = 0x0008
 	keyeventfExtendedKey = 0x0001
 	keyeventfKeyUp       = 0x0002
 	injectionMarker      = 0x44564B52
@@ -69,7 +71,8 @@ type output struct{}
 
 func (o output) Send(event keyboard.Event) error {
 	flags := uint32(0)
-	if isExtendedVirtualKey(event.VirtualKey) {
+	flags |= keyeventfScancode
+	if event.Key.Extended {
 		flags |= keyeventfExtendedKey
 	}
 	if event.KeyUp {
@@ -78,9 +81,9 @@ func (o output) Send(event keyboard.Event) error {
 	eventInput := input{
 		Type: inputKeyboard,
 		Ki: keyboardInput{
-			VirtualKey: event.VirtualKey,
-			Flags:      flags,
-			ExtraInfo:  injectionMarker,
+			ScanCode:  event.Key.ScanCode,
+			Flags:     flags,
+			ExtraInfo: injectionMarker,
 		},
 	}
 	sent, _, err := procSendInput.Call(1, uintptr(unsafe.Pointer(&eventInput)), unsafe.Sizeof(eventInput))
@@ -113,16 +116,16 @@ func Run(mappings *keyboard.Mappings, stop <-chan struct{}, debugOutput io.Write
 			eventType = "up"
 		}
 		handled, err := simulated.Handle(keyboard.Event{
-			VirtualKey: uint16(event.VirtualKey),
-			KeyUp:      keyUp,
+			Key:   keys.Key{ScanCode: uint16(event.ScanCode), Extended: event.Flags&keyeventfExtendedKey != 0},
+			KeyUp: keyUp,
 		})
 		if err != nil {
-			debugf(debugOutput, "SendInput failed for vk=0x%02X: %v", event.VirtualKey, err)
+			debugf(debugOutput, "SendInput failed for sc=0x%02X: %v", event.ScanCode, err)
 		}
 		if !handled {
 			return callNext(code, wParam, event)
 		}
-		debugf(debugOutput, "remap vk=0x%02X (%s)", event.VirtualKey, eventType)
+		debugf(debugOutput, "remap sc=0x%02X (%s)", event.ScanCode, eventType)
 		return 1
 	}
 
@@ -158,15 +161,6 @@ func Run(mappings *keyboard.Mappings, stop <-chan struct{}, debugOutput io.Write
 func callNext(code int, wParam uintptr, event *keyboardHook) uintptr {
 	result, _, _ := procCallNextHookEx.Call(0, uintptr(code), wParam, uintptr(unsafe.Pointer(event)))
 	return result
-}
-
-func isExtendedVirtualKey(key uint16) bool {
-	switch key {
-	case 0xA3, 0xA5, 0x5B, 0x5C: // VK_RCONTROL, VK_RMENU, VK_LWIN, VK_RWIN
-		return true
-	default:
-		return false
-	}
 }
 
 func debugf(output io.Writer, format string, args ...any) {

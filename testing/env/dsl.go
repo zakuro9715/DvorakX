@@ -21,10 +21,10 @@ func parseEvents(t testingT, text string) []keyboard.Event {
 			t.Fatalf("unsupported key %q", name)
 		}
 		if !hasAction {
-			events = append(events, keyboard.Event{VirtualKey: key}, keyboard.Event{VirtualKey: key, KeyUp: true})
+			events = append(events, keyboard.Event{Key: key}, keyboard.Event{Key: key, KeyUp: true})
 			continue
 		}
-		events = append(events, keyboard.Event{VirtualKey: key, KeyUp: action == "up"})
+		events = append(events, keyboard.Event{Key: key, KeyUp: action == "up"})
 	}
 	return events
 }
@@ -39,13 +39,13 @@ func stripComments(text string) string {
 	return strings.Join(lines, "\n")
 }
 
-func parseKey(name string) (uint16, bool) {
+func parseKey(name string) (keys.Key, bool) {
 	if strings.HasPrefix(strings.ToLower(name), "0x") {
 		value, err := strconv.ParseUint(name[2:], 16, 16)
-		return uint16(value), err == nil
+		return keys.Key{ScanCode: uint16(value)}, err == nil
 	}
 	if key, ok := keys.Lookup(name); ok {
 		return key, true
 	}
-	return 0, false
+	return keys.Key{}, false
 }

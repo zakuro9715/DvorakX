@@ -63,7 +63,7 @@ const (
 // ActionSpec contains an action and its resolved key arguments.
 type ActionSpec struct {
 	Kind Action
-	Keys []uint16
+	Keys []keys.Key
 }
 
 type sourcePosition struct {
@@ -111,7 +111,7 @@ func parseActions(value any, path string, positions sourcePositions, diagnostics
 	return actions
 }
 
-func parseSendKeys(value any, path string, positions sourcePositions, diagnostics *DiagnosticsError) ([]uint16, bool) {
+func parseSendKeys(value any, path string, positions sourcePositions, diagnostics *DiagnosticsError) ([]keys.Key, bool) {
 	var names []string
 	switch value := value.(type) {
 	case string:
@@ -134,7 +134,7 @@ func parseSendKeys(value any, path string, positions sourcePositions, diagnostic
 		addDiagnosticf(diagnostics, positions, path, "send-keys must contain at least one key")
 		return nil, false
 	}
-	resolved := make([]uint16, len(names))
+	resolved := make([]keys.Key, len(names))
 	for index, name := range names {
 		key, ok := keys.Lookup(name)
 		if !ok {
@@ -361,9 +361,9 @@ func Parse(data []byte) (Config, error) {
 	diagnostics := NewDiagnostics()
 	globalRemap, globalNoop, globalSendKeys := parseGlobal(raw, positions, diagnostics)
 
-	remap := make(map[uint16]uint16)
-	noop := make(map[uint16]bool)
-	sendKeys := make(map[uint16][]uint16)
+	remap := make(map[keys.Key]keys.Key)
+	noop := make(map[keys.Key]bool)
+	sendKeys := make(map[keys.Key][]keys.Key)
 	hasLayers := resolveLayers(raw, remap, noop, sendKeys, positions, diagnostics)
 	if len(diagnostics.Items) != 0 {
 		return Config{}, diagnostics
@@ -381,10 +381,10 @@ func Parse(data []byte) (Config, error) {
 		delete(sendKeys, source)
 		noop[source] = true
 	}
-	for source, keys := range globalSendKeys {
+	for source, sendKeysList := range globalSendKeys {
 		delete(remap, source)
 		delete(noop, source)
-		sendKeys[source] = append([]uint16(nil), keys...)
+		sendKeys[source] = append([]keys.Key(nil), sendKeysList...)
 	}
 	if len(remap) == 0 && len(noop) == 0 && len(sendKeys) == 0 {
 		addDiagnosticf(diagnostics, positions, "global.remaps", "config must define at least one mapping")
@@ -475,7 +475,7 @@ func captureActions(value any) map[string]ActionSpec {
 	return actions
 }
 
-func parseSendKeysForCapture(value any) ([]uint16, bool) {
+func parseSendKeysForCapture(value any) ([]keys.Key, bool) {
 	var names []string
 	switch value := value.(type) {
 	case string:
@@ -495,7 +495,7 @@ func parseSendKeysForCapture(value any) ([]uint16, bool) {
 	if len(names) == 0 {
 		return nil, false
 	}
-	resolved := make([]uint16, len(names))
+	resolved := make([]keys.Key, len(names))
 	for index, name := range names {
 		key, ok := keys.Lookup(name)
 		if !ok {
@@ -546,19 +546,19 @@ func addDiagnosticf(e *DiagnosticsError, positions sourcePositions, path, format
 	})
 }
 
-func parseGlobal(raw map[string]any, positions sourcePositions, diagnostics *DiagnosticsError) (map[uint16]uint16, map[uint16]bool, map[uint16][]uint16) {
+func parseGlobal(raw map[string]any, positions sourcePositions, diagnostics *DiagnosticsError) (map[keys.Key]keys.Key, map[keys.Key]bool, map[keys.Key][]keys.Key) {
 	value, ok := raw["global"]
 	if !ok {
-		return map[uint16]uint16{}, map[uint16]bool{}, map[uint16][]uint16{}
+		return map[keys.Key]keys.Key{}, map[keys.Key]bool{}, map[keys.Key][]keys.Key{}
 	}
 	table, ok := value.(map[string]any)
 	if !ok {
 		addDiagnosticf(diagnostics, positions, "global", "[global] must be a TOML table")
-		return map[uint16]uint16{}, map[uint16]bool{}, map[uint16][]uint16{}
+		return map[keys.Key]keys.Key{}, map[keys.Key]bool{}, map[keys.Key][]keys.Key{}
 	}
-	remap := make(map[uint16]uint16)
-	noop := make(map[uint16]bool)
-	sendKeys := make(map[uint16][]uint16)
+	remap := make(map[keys.Key]keys.Key)
+	noop := make(map[keys.Key]bool)
+	sendKeys := make(map[keys.Key][]keys.Key)
 	actions := parseActions(table["actions"], "global.actions", positions, diagnostics)
 	for _, name := range sortedKeys(table) {
 		if name != "remaps" && name != "actions" {
@@ -589,10 +589,10 @@ func parseGlobal(raw map[string]any, positions sourcePositions, diagnostics *Dia
 	return remap, noop, sendKeys
 }
 
-func parseRemaps(value any, path string, actions map[string]ActionSpec, positions sourcePositions, diagnostics *DiagnosticsError) (map[uint16]uint16, map[uint16]bool, map[uint16][]uint16) {
-	remap := make(map[uint16]uint16)
-	noop := make(map[uint16]bool)
-	sendKeys := make(map[uint16][]uint16)
+func parseRemaps(value any, path string, actions map[string]ActionSpec, positions sourcePositions, diagnostics *DiagnosticsError) (map[keys.Key]keys.Key, map[keys.Key]bool, map[keys.Key][]keys.Key) {
+	remap := make(map[keys.Key]keys.Key)
+	noop := make(map[keys.Key]bool)
+	sendKeys := make(map[keys.Key][]keys.Key)
 	displayPath := remapDisplayPath(path)
 	switch remaps := value.(type) {
 	case map[string]any:
@@ -621,7 +621,7 @@ func remapDisplayPath(path string) string {
 	return "[" + path[:separator] + "]" + path[separator:]
 }
 
-func mergeRemap(remap map[uint16]uint16, noop map[uint16]bool, sendKeys map[uint16][]uint16, entries map[string]any, actions map[string]ActionSpec, positions sourcePositions, diagnostics *DiagnosticsError, path string) {
+func mergeRemap(remap map[keys.Key]keys.Key, noop map[keys.Key]bool, sendKeys map[keys.Key][]keys.Key, entries map[string]any, actions map[string]ActionSpec, positions sourcePositions, diagnostics *DiagnosticsError, path string) {
 	for _, sourceName := range sortedKeysByPosition(entries, positions, path) {
 		value := entries[sourceName]
 		destinationName, ok := value.(string)
@@ -650,7 +650,7 @@ func mergeRemap(remap map[uint16]uint16, noop map[uint16]bool, sendKeys map[uint
 			case NoopAction:
 				noop[source] = true
 			case SendKeysAction:
-				sendKeys[source] = append([]uint16(nil), action.Keys...)
+				sendKeys[source] = append([]keys.Key(nil), action.Keys...)
 			}
 			continue
 		}
@@ -673,7 +673,7 @@ func mergeRemap(remap map[uint16]uint16, noop map[uint16]bool, sendKeys map[uint
 	}
 }
 
-func resolveLayers(raw map[string]any, remap map[uint16]uint16, noop map[uint16]bool, sendKeys map[uint16][]uint16, positions sourcePositions, diagnostics *DiagnosticsError) bool {
+func resolveLayers(raw map[string]any, remap map[keys.Key]keys.Key, noop map[keys.Key]bool, sendKeys map[keys.Key][]keys.Key, positions sourcePositions, diagnostics *DiagnosticsError) bool {
 	_, hasMeta := raw["meta"]
 	sourceValue, hasSource := raw["src"]
 	layerNames := sortedLayerNames(raw, positions)
@@ -757,7 +757,7 @@ func sortedLayerNames(raw map[string]any, positions sourcePositions) []string {
 	return layerNames
 }
 
-func resolveDefaultLayer(sourceValue, layerValue any, defaultLayer string, remap map[uint16]uint16, noop map[uint16]bool, sendKeys map[uint16][]uint16, positions sourcePositions, diagnostics *DiagnosticsError) bool {
+func resolveDefaultLayer(sourceValue, layerValue any, defaultLayer string, remap map[keys.Key]keys.Key, noop map[keys.Key]bool, sendKeys map[keys.Key][]keys.Key, positions sourcePositions, diagnostics *DiagnosticsError) bool {
 	sourceActions := parseActions(nil, "src.actions", positions, diagnostics)
 	if sourceTable, ok := sourceValue.(map[string]any); ok {
 		sourceActions = parseActions(sourceTable["actions"], "src.actions", positions, diagnostics)
@@ -793,7 +793,7 @@ func resolveDefaultLayer(sourceValue, layerValue any, defaultLayer string, remap
 			noop[sourceKey] = true
 			continue
 		case SendKeysAction:
-			sendKeys[sourceKey] = append([]uint16(nil), destination[index].action.Keys...)
+			sendKeys[sourceKey] = append([]keys.Key(nil), destination[index].action.Keys...)
 			continue
 		}
 		destinationKey, destinationOK := keys.Lookup(destination[index].value)
@@ -832,10 +832,10 @@ func parseLayer(value any, layerName string, positions sourcePositions, diagnost
 	parseLayerRemaps(table, layerName, actions, positions, diagnostics)
 }
 
-func parseLayerRemaps(table map[string]any, layerName string, actions map[string]ActionSpec, positions sourcePositions, diagnostics *DiagnosticsError) (map[uint16]uint16, map[uint16]bool, map[uint16][]uint16) {
+func parseLayerRemaps(table map[string]any, layerName string, actions map[string]ActionSpec, positions sourcePositions, diagnostics *DiagnosticsError) (map[keys.Key]keys.Key, map[keys.Key]bool, map[keys.Key][]keys.Key) {
 	value, ok := table["remaps"]
 	if !ok {
-		return map[uint16]uint16{}, map[uint16]bool{}, map[uint16][]uint16{}
+		return map[keys.Key]keys.Key{}, map[keys.Key]bool{}, map[keys.Key][]keys.Key{}
 	}
 	return parseRemaps(value, layerName+".remaps", actions, positions, diagnostics)
 }

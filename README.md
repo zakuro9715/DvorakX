@@ -18,7 +18,7 @@ By default, it loads `config.toml`. Pass a different file with `--config`:
 .\dvorakz.exe --config C:\path\to\config.toml
 ```
 
-Pass `--debug` to output configuration, hook lifecycle, and remapped virtual-key
+Pass `--debug` to output configuration, hook lifecycle, and remapped scan code
 events:
 
 ```powershell
