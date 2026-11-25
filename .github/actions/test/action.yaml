@@ -1,0 +1,14 @@
+name: Test
+
+runs:
+  using: "composite"
+  steps:
+  - name: Test
+    run: go test ./... -coverprofile=coverage.out -covermode=atomic
+    shell: bash
+  - name: Upload coverage
+    uses: codecov/codecov-action@v7
+    with:
+      files: ./coverage.out
+      fail_ci_if_error: true
+      use_oidc: true

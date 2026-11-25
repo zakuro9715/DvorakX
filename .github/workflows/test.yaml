@@ -8,6 +8,7 @@ on:
 
 permissions:
   contents: read
+  id-token: write
 
 env:
   DVORAKX_E2E: 1
@@ -18,12 +19,10 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: ./.github/actions/setup
-      - name: Run tests
-        run: go test ./...
+      - uses: ./.github/actions/test
   test-windows:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v7
       - uses: ./.github/actions/setup
-      - name: Run tests
-        run: go test ./...
+      - uses: ./.github/actions/test
