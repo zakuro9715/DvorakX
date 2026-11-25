@@ -13,7 +13,7 @@ import (
 	"github.com/pelletier/go-toml/v2"
 	"github.com/pelletier/go-toml/v2/unstable"
 
-	"github.com/zakuro9715/DvorakX/internal/keys"
+	"github.com/zakuro9715/DvorakZ/internal/keys"
 )
 
 // Config contains the validated configuration file structure.

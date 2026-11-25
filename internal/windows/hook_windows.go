@@ -9,7 +9,7 @@ import (
 	"syscall"
 	"unsafe"
 
-	"github.com/zakuro9715/DvorakX/internal/keyboard"
+	"github.com/zakuro9715/DvorakZ/internal/keyboard"
 )
 
 const (
@@ -171,6 +171,6 @@ func isExtendedVirtualKey(key uint16) bool {
 
 func debugf(output io.Writer, format string, args ...any) {
 	if output != nil {
-		_, _ = fmt.Fprintf(output, "dvorakv: debug: "+format+"\n", args...)
+		_, _ = fmt.Fprintf(output, "dvorakz: debug: "+format+"\n", args...)
 	}
 }

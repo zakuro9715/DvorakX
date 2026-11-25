@@ -1,4 +1,4 @@
-module github.com/zakuro9715/DvorakX
+module github.com/zakuro9715/DvorakZ
 
 go 1.27.0
 

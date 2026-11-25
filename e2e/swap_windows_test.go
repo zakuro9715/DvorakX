@@ -5,7 +5,7 @@ package e2e_test
 import (
 	"testing"
 
-	"github.com/zakuro9715/DvorakX/e2e/testenv"
+	"github.com/zakuro9715/DvorakZ/e2e/testenv"
 )
 
 func TestSwapAAndB(t *testing.T) {

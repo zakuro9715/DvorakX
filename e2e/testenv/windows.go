@@ -17,7 +17,7 @@ import (
 	"time"
 	"unsafe"
 
-	"github.com/zakuro9715/DvorakX/internal/keys"
+	"github.com/zakuro9715/DvorakZ/internal/keys"
 )
 
 const (
@@ -81,11 +81,11 @@ type Environment struct {
 	window uintptr
 }
 
-// Start builds and runs DvorakX with config, then creates a focused input window.
+// Start builds and runs DvorakZ with config, then creates a focused input window.
 func Start(t *testing.T, config string) *Environment {
 	t.Helper()
-	if os.Getenv("DVORAKX_E2E") != "1" {
-		t.Skip("set DVORAKX_E2E=1 to run the Windows keyboard-hook E2E test")
+	if os.Getenv("DVORAKZ_E2E") != "1" {
+		t.Skip("set DVORAKZ_E2E=1 to run the Windows keyboard-hook E2E test")
 	}
 
 	e2eMutex.Lock()
@@ -151,7 +151,7 @@ func createReceiverWindow(t *testing.T) uintptr {
 	if err != nil {
 		t.Fatalf("encode receiver class name: %v", err)
 	}
-	title, err := syscall.UTF16PtrFromString("DvorakX E2E receiver")
+	title, err := syscall.UTF16PtrFromString("DvorakZ E2E receiver")
 	if err != nil {
 		t.Fatalf("encode receiver title: %v", err)
 	}
@@ -184,8 +184,8 @@ func startRemapper(t *testing.T, config string) {
 
 	root := repositoryRoot(t)
 	tempDirectory := t.TempDir()
-	executablePath := filepath.Join(tempDirectory, "dvorakx.exe")
-	build := exec.Command("go", "build", "-o", executablePath, "./cmd/dvorakx")
+	executablePath := filepath.Join(tempDirectory, "dvorakz.exe")
+	build := exec.Command("go", "build", "-o", executablePath, "./cmd/dvorakz")
 	build.Dir = root
 	if output, err := build.CombinedOutput(); err != nil {
 		t.Fatalf("build remapper: %v\n%s", err, output)

@@ -2,12 +2,12 @@
 
 ## Format
 
-DvorakX is configured by toml file.
+DvorakZ is configured by toml file.
 
 ## Summary
 
 - One layer, One table.
-- configure DvorakX on the `[meta]` table
+- configure DvorakZ on the `[meta]` table
 - There are some special string.
 - String literals with prefixes have special meanings.
     - `&layer-name` is reference to other layer.
@@ -18,7 +18,7 @@ DvorakX is configured by toml file.
 ```toml
 # -- global config --
 [meta]
-# configure DvorakX itself
+# configure DvorakZ itself
 
 # table name of source definition. by default, `src`.
 # To avoid key duplication, Don't write `src='src'`, just omit it.

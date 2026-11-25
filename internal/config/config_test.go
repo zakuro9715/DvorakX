@@ -592,7 +592,7 @@ func hasErrorMessage(err error, want string) bool {
 }
 
 func TestResolveConfigPath(t *testing.T) {
-	path, err := ResolveConfigPath("", filepath.Join("C:", "tools", "dvorakv.exe"))
+	path, err := ResolveConfigPath("", filepath.Join("C:", "tools", "dvorakz.exe"))
 	if err != nil {
 		t.Fatalf("ResolveConfigPath() error = %v", err)
 	}

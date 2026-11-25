@@ -6,8 +6,8 @@ import (
 	"strings"
 	"sync/atomic"
 
-	"github.com/zakuro9715/DvorakX/internal/config"
-	"github.com/zakuro9715/DvorakX/internal/keys"
+	"github.com/zakuro9715/DvorakZ/internal/config"
+	"github.com/zakuro9715/DvorakZ/internal/keys"
 )
 
 // Mappings provides lock-free replacement of the active key map.

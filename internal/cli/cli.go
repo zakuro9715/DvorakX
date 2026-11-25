@@ -11,8 +11,8 @@ import (
 
 	urfavecli "github.com/urfave/cli/v3"
 
-	"github.com/zakuro9715/DvorakX/internal/config"
-	"github.com/zakuro9715/DvorakX/internal/keyboard"
+	"github.com/zakuro9715/DvorakZ/internal/config"
+	"github.com/zakuro9715/DvorakZ/internal/keyboard"
 )
 
 // Runner starts the platform-specific remapping backend.
@@ -21,7 +21,7 @@ type Runner func(mappings *keyboard.Mappings, stop <-chan struct{}, debug bool) 
 // Run parses command-line arguments and runs the remapper.
 func Run(ctx context.Context, args []string, runner Runner) error {
 	command := &urfavecli.Command{
-		Name:  "dvorakx",
+		Name:  "dvorakz",
 		Usage: "remap keyboard keys",
 		Flags: []urfavecli.Flag{
 			&urfavecli.StringFlag{
@@ -62,7 +62,7 @@ func run(ctx context.Context, configPath string, debug bool, runner Runner) erro
 		return fmt.Errorf("prepare config: %w", err)
 	}
 	if debug {
-		fmt.Fprintf(os.Stderr, "dvorakv: debug: loaded config from %s\n", configPath)
+		fmt.Fprintf(os.Stderr, "dvorakz: debug: loaded config from %s\n", configPath)
 	}
 
 	stop := make(chan struct{})
@@ -82,7 +82,7 @@ func run(ctx context.Context, configPath string, debug bool, runner Runner) erro
 	go watchConfig(configPath, displayPath, mappings, stop, debug)
 
 	//nolint:forbidigo
-	fmt.Printf("DvorakX remapping configured keys; press Ctrl+C to stop.\n")
+	fmt.Printf("DvorakZ remapping configured keys; press Ctrl+C to stop.\n")
 	return runner(mappings, stop, debug)
 }
 
@@ -97,7 +97,7 @@ func watchConfig(path, displayPath string, mappings *keyboard.Mappings, stop <-c
 
 	info, err := os.Stat(path)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "dvorakv: watch config %q: %v\n", path, err)
+		fmt.Fprintf(os.Stderr, "dvorakz: watch config %q: %v\n", path, err)
 		return
 	}
 	previous := configFileState{size: info.Size(), modTime: info.ModTime()}
@@ -111,7 +111,7 @@ func watchConfig(path, displayPath string, mappings *keyboard.Mappings, stop <-c
 			info, err := os.Stat(path)
 			if err != nil {
 				if message := err.Error(); message != lastFailure {
-					fmt.Fprintf(os.Stderr, "dvorakv: reload config %q: %v\n", path, err)
+					fmt.Fprintf(os.Stderr, "dvorakz: reload config %q: %v\n", path, err)
 					lastFailure = message
 				}
 				continue
@@ -133,7 +133,7 @@ func watchConfig(path, displayPath string, mappings *keyboard.Mappings, stop <-c
 				continue
 			}
 			if debug {
-				fmt.Fprintf(os.Stderr, "dvorakv: debug: reloaded config from %s\n", path)
+				fmt.Fprintf(os.Stderr, "dvorakz: debug: reloaded config from %s\n", path)
 			}
 		}
 	}
@@ -155,11 +155,11 @@ func formatConfigError(operation, path string, err error, colors ...bool) string
 	formatter := config.PrettyFormatter{Color: color}
 	var output strings.Builder
 	if diagnostics, ok := errors.AsType[*config.DiagnosticsError](err); ok {
-		fmt.Fprintf(&output, "dvorakv: %s config %q:\n", operation, path)
+		fmt.Fprintf(&output, "dvorakz: %s config %q:\n", operation, path)
 		_ = formatter.FormatTo(&output, diagnostics.Items)
 		return output.String()
 	}
-	prefix := fmt.Sprintf("dvorakv: %s config %q", operation, path)
+	prefix := fmt.Sprintf("dvorakz: %s config %q", operation, path)
 	lines := strings.Split(err.Error(), "\n")
 	for index, line := range lines {
 		lines[index] = prefix + ": " + line

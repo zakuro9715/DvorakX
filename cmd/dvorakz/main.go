@@ -7,8 +7,8 @@ import (
 	"os"
 	"strings"
 
-	"github.com/zakuro9715/DvorakX/internal/cli"
-	"github.com/zakuro9715/DvorakX/internal/config"
+	"github.com/zakuro9715/DvorakZ/internal/cli"
+	"github.com/zakuro9715/DvorakZ/internal/config"
 )
 
 func main() {
@@ -29,7 +29,7 @@ func formatError(err error) string {
 		_ = formatter.FormatTo(&output, diagnosticList.Items)
 		return output.String()
 	}
-	fmt.Fprintf(&output, "dvorakv: %s", err)
+	fmt.Fprintf(&output, "dvorakz: %s", err)
 	return output.String()
 }
 
