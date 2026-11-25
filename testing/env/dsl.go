@@ -4,8 +4,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/zakuro9715/DvorakX/internal/keyboard"
-	"github.com/zakuro9715/DvorakX/internal/keys"
+	"github.com/zakuro9715/DvorakZ/internal/keyboard"
+	"github.com/zakuro9715/DvorakZ/internal/keys"
 )
 
 func parseEvents(t testingT, text string) []keyboard.Event {

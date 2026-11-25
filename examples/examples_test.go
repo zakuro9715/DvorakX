@@ -3,7 +3,7 @@ package examples
 import (
 	"testing"
 
-	"github.com/zakuro9715/DvorakX/testing/env"
+	"github.com/zakuro9715/DvorakZ/testing/env"
 )
 
 func TestAllBehavior(t *testing.T) {

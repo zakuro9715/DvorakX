@@ -1,6 +1,6 @@
 # AGENTS.md
 
-DvorakX is keyboard remaper.
+DvorakZ is keyboard remaper.
 
 ## Rules
 

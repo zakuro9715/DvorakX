@@ -4,8 +4,8 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/zakuro9715/DvorakX/internal/keyboard"
-	"github.com/zakuro9715/DvorakX/testing/env"
+	"github.com/zakuro9715/DvorakZ/internal/keyboard"
+	"github.com/zakuro9715/DvorakZ/testing/env"
 )
 
 func TestSimulatedKeyboardRemapsPressedKeyAfterMappingsReload(t *testing.T) {

@@ -1,4 +1,4 @@
-# DvorakX
+# DvorakZ
 
 A keyboard remaper, not only dvorak.
 
@@ -9,20 +9,20 @@ Supports windows only for now. Linux and MacOS support is planned.
 ## Usage
 
 ```powershell
-go build -o dvorakx.exe ./cmd/dvorakx
+go build -o dvorakz.exe ./cmd/dvorakz
 ```
 
 By default, it loads `config.toml`. Pass a different file with `--config`:
 
 ```powershell
-.\dvorakv.exe --config C:\path\to\config.toml
+.\dvorakz.exe --config C:\path\to\config.toml
 ```
 
 Pass `--debug` to output configuration, hook lifecycle, and remapped virtual-key
 events:
 
 ```powershell
-.\dvorakv.exe --debug
+.\dvorakz.exe --debug
 ```
 
 ## Development
@@ -37,7 +37,7 @@ global hook, and verifies that `a` and `b` are swapped in a test window. Run it
 only from an interactive Windows desktop:
 
 ```powershell
-$env:DVORAKX_E2E = "1"
+$env:DVORAKZ_E2E = "1"
 go test ./e2e
 ```
 
@@ -57,7 +57,7 @@ tests expect the US keyboard layout.
 
 ## About
 
-### Why DvorakX?
+### Why DvorakZ?
 
 I'm using DvorakJ for a long time. I like it.
 
@@ -86,14 +86,14 @@ Now, DvorakJ is no longer available. Website was closed.
 
 ### Pros/Cons
 
-- DvorakX is easy to use.
+- DvorakZ is easy to use.
     - Simple configuration file.
     - GUI
-- DvorakX is not complex
+- DvorakZ is not complex
     - No support for complex key combinations.
-- DvorakX is a new project.
+- DvorakZ is a new project.
     - Not stable yet.
-- DvorakX is not cross-platform for now.
+- DvorakZ is not cross-platform for now.
     - Only Windows is supported.
     - I'm planning to support Linux and MacOS in the future.
 

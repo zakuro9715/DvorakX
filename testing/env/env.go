@@ -11,9 +11,9 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/zakuro9715/DvorakX/internal/config"
-	"github.com/zakuro9715/DvorakX/internal/keyboard"
-	"github.com/zakuro9715/DvorakX/testing/diff"
+	"github.com/zakuro9715/DvorakZ/internal/config"
+	"github.com/zakuro9715/DvorakZ/internal/keyboard"
+	"github.com/zakuro9715/DvorakZ/testing/diff"
 )
 
 // Environment applies keyboard events to a simulated keyboard and records its output.

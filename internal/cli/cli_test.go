@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/zakuro9715/DvorakX/internal/config"
-	"github.com/zakuro9715/DvorakX/internal/keyboard"
+	"github.com/zakuro9715/DvorakZ/internal/config"
+	"github.com/zakuro9715/DvorakZ/internal/keyboard"
 )
 
 func TestRunPassesConfigurationAndDebugFlagToRunner(t *testing.T) {
@@ -22,7 +22,7 @@ func TestRunPassesConfigurationAndDebugFlagToRunner(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	err := Run(ctx, []string{"dvorakx", "--config", configPath, "--debug"}, func(mappings *keyboard.Mappings, stop <-chan struct{}, debug bool) error {
+	err := Run(ctx, []string{"dvorakz", "--config", configPath, "--debug"}, func(mappings *keyboard.Mappings, stop <-chan struct{}, debug bool) error {
 		if !debug {
 			t.Error("debug = false, want true")
 		}
@@ -48,7 +48,7 @@ func TestRunReturnsAllConfigurationDiagnostics(t *testing.T) {
 		t.Fatalf("write configuration: %v", err)
 	}
 
-	err := Run(context.Background(), []string{"dvorakx", "--config", configPath}, func(*keyboard.Mappings, <-chan struct{}, bool) error {
+	err := Run(context.Background(), []string{"dvorakz", "--config", configPath}, func(*keyboard.Mappings, <-chan struct{}, bool) error {
 		t.Fatal("runner called for invalid configuration")
 		return nil
 	})
@@ -94,12 +94,12 @@ func TestLoadConfigUsesSeparateDisplayPath(t *testing.T) {
 
 func TestFormatConfigErrorPrefixesEveryDiagnostic(t *testing.T) {
 	formatted := formatConfigError("reload", "config.toml", errors.New("line 2, column 3: first\nline 4, column 8: second"))
-	want := "dvorakv: reload config \"config.toml\": line 2, column 3: first\n" +
-		"dvorakv: reload config \"config.toml\": line 4, column 8: second"
+	want := "dvorakz: reload config \"config.toml\": line 2, column 3: first\n" +
+		"dvorakz: reload config \"config.toml\": line 4, column 8: second"
 	if formatted != want {
 		t.Errorf("formatConfigError() = %q, want %q", formatted, want)
 	}
-	if strings.Count(formatted, "dvorakv: reload config") != 2 {
+	if strings.Count(formatted, "dvorakz: reload config") != 2 {
 		t.Errorf("formatConfigError() = %q, want one prefix per diagnostic", formatted)
 	}
 }
@@ -116,7 +116,7 @@ func TestFormatConfigErrorRendersDiagnostics(t *testing.T) {
 
 	formatted := formatConfigError("reload", configPath, err)
 	for _, want := range []string{
-		fmt.Sprintf("dvorakv: reload config %q:", configPath),
+		fmt.Sprintf("dvorakz: reload config %q:", configPath),
 		fmt.Sprintf("[%s:2, 1]: unsupported [global] field \"unknown\"", configPath),
 		"   2 | unknown = true",
 	} {

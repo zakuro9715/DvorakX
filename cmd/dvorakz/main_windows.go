@@ -5,8 +5,8 @@ package main
 import (
 	"os"
 
-	"github.com/zakuro9715/DvorakX/internal/keyboard"
-	"github.com/zakuro9715/DvorakX/internal/windows"
+	"github.com/zakuro9715/DvorakZ/internal/keyboard"
+	"github.com/zakuro9715/DvorakZ/internal/windows"
 )
 
 func run(mappings *keyboard.Mappings, stop <-chan struct{}, debug bool) error {

@@ -1,7 +1,7 @@
 package testing
 
 import (
-	"github.com/zakuro9715/DvorakX/testing/env"
+	"github.com/zakuro9715/DvorakZ/testing/env"
 )
 
 const config = `
