@@ -49,10 +49,11 @@ var (
 )
 
 type keyboardInput struct {
-	scanCode  uint16
-	flags     uint32
-	time      uint32
-	extraInfo uintptr
+	virtualKey uint16
+	scanCode   uint16
+	flags      uint32
+	time       uint32
+	extraInfo  uintptr
 }
 
 type input struct {
@@ -246,17 +247,25 @@ func stopRemapper(t *testing.T, command *exec.Cmd) {
 func sendKey(t *testing.T, key keys.Key, keyUp bool) {
 	t.Helper()
 
-	flags := uint32(keyEventScanCode)
-	if key.Extended {
-		flags |= keyEventExtended
+	flags := uint32(0)
+	inputKey := keyboardInput{}
+	if key.VirtualKeyCode != 0 {
+		inputKey.virtualKey = key.VirtualKeyCode
+	} else {
+		flags |= keyEventScanCode
+		inputKey.scanCode = key.ScanCode
+		if key.Extended {
+			flags |= keyEventExtended
+		}
 	}
 	if keyUp {
 		flags |= keyEventKeyUp
 	}
 	event := input{
 		inputType: inputKeyboard,
-		keyboard:  keyboardInput{scanCode: key.ScanCode, flags: flags},
+		keyboard:  inputKey,
 	}
+	event.keyboard.flags = flags
 	sent, _, err := procSendInput.Call(1, uintptr(unsafe.Pointer(&event)), unsafe.Sizeof(event))
 	if sent != 1 {
 		t.Fatalf("send key %#x (up=%t): %v", key.ScanCode, keyUp, err)

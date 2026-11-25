@@ -54,12 +54,55 @@ func TestLookupNamedKeys(t *testing.T) {
 		{name: "lang2", want: Key{ScanCode: Hanja}},
 		{name: "intlyen", want: Key{ScanCode: Yen}},
 		{name: "iso", want: Key{ScanCode: IntlBackslash}},
+		{name: "pause", want: Key{VirtualKeyCode: VirtualKeyPause}},
+		{name: "break", want: Key{VirtualKeyCode: VirtualKeyCancel}},
+		{name: "browserback", want: Key{VirtualKeyCode: VirtualKeyBrowserBack}},
+		{name: "volumeup", want: Key{VirtualKeyCode: VirtualKeyVolumeUp}},
+		{name: "mediaplaypause", want: Key{VirtualKeyCode: VirtualKeyMediaPlayPause}},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			got, ok := Lookup(test.name)
 			if !ok || got != test.want {
 				t.Fatalf("Lookup(%q) = (%#v, %t), want (%#v, true)", test.name, got, ok, test.want)
+			}
+		})
+	}
+}
+
+func TestNew(t *testing.T) {
+	tests := []struct {
+		name       string
+		virtualKey uint16
+		scanCode   uint16
+		extended   bool
+		want       Key
+	}{
+		{
+			name:       "pause",
+			virtualKey: VirtualKeyPause,
+			scanCode:   0x45,
+			want:       Key{VirtualKeyCode: VirtualKeyPause},
+		},
+		{
+			name:       "ordinary key",
+			virtualKey: 0x41,
+			scanCode:   A,
+			want:       Key{ScanCode: A},
+		},
+		{
+			name:       "extended key",
+			virtualKey: 0x25,
+			scanCode:   ArrowLeft,
+			extended:   true,
+			want:       Key{ScanCode: ArrowLeft, Extended: true},
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if got := New(test.virtualKey, test.scanCode, test.extended); got != test.want {
+				t.Errorf("New(%#x, %#x, %t) = %#v, want %#v",
+					test.virtualKey, test.scanCode, test.extended, got, test.want)
 			}
 		})
 	}
@@ -78,6 +121,8 @@ func TestNameNamedKeys(t *testing.T) {
 		{key: Key{ScanCode: PageDown, Extended: true}, want: "pgdn"},
 		{key: Key{ScanCode: Delete, Extended: true}, want: "del"},
 		{key: Key{ScanCode: Enter, Extended: true}, want: "kpenter"},
+		{key: Key{VirtualKeyCode: VirtualKeyPause}, want: "pause"},
+		{key: Key{VirtualKeyCode: VirtualKeyMediaPlayPause}, want: "mediaplaypause"},
 	}
 	for _, test := range tests {
 		if got := Name(test.key); got != test.want {
@@ -89,6 +134,9 @@ func TestNameNamedKeys(t *testing.T) {
 func TestNameUnknownKey(t *testing.T) {
 	if got := Name(Key{ScanCode: 0x99}); got != "0x99" {
 		t.Errorf("Name(0x99) = %q, want %q", got, "0x99")
+	}
+	if got := Name(Key{VirtualKeyCode: 0x99}); got != "0xVK99" {
+		t.Errorf("Name(VK 0x99) = %q, want %q", got, "0xVK99")
 	}
 }
 

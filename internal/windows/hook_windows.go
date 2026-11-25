@@ -71,20 +71,23 @@ type output struct{}
 
 func (o output) Send(event keyboard.Event) error {
 	flags := uint32(0)
-	flags |= keyeventfScancode
-	if event.Key.Extended {
-		flags |= keyeventfExtendedKey
+	inputKey := keyboardInput{ExtraInfo: injectionMarker}
+	if event.Key.VirtualKeyCode != 0 {
+		inputKey.VirtualKey = event.Key.VirtualKeyCode
+	} else {
+		flags |= keyeventfScancode
+		inputKey.ScanCode = event.Key.ScanCode
+		if event.Key.Extended {
+			flags |= keyeventfExtendedKey
+		}
 	}
 	if event.KeyUp {
 		flags |= keyeventfKeyUp
 	}
+	inputKey.Flags = flags
 	eventInput := input{
 		Type: inputKeyboard,
-		Ki: keyboardInput{
-			ScanCode:  event.Key.ScanCode,
-			Flags:     flags,
-			ExtraInfo: injectionMarker,
-		},
+		Ki:   inputKey,
 	}
 	sent, _, err := procSendInput.Call(1, uintptr(unsafe.Pointer(&eventInput)), unsafe.Sizeof(eventInput))
 	if sent == 0 {
@@ -116,7 +119,11 @@ func Run(mappings *keyboard.Mappings, stop <-chan struct{}, debugOutput io.Write
 			eventType = "up"
 		}
 		handled, err := simulated.Handle(keyboard.Event{
-			Key:   keys.Key{ScanCode: uint16(event.ScanCode), Extended: event.Flags&keyeventfExtendedKey != 0},
+			Key: keys.New(
+				uint16(event.VirtualKey),
+				uint16(event.ScanCode),
+				event.Flags&keyeventfExtendedKey != 0,
+			),
 			KeyUp: keyUp,
 		})
 		if err != nil {

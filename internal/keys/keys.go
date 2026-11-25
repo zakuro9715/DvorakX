@@ -6,10 +6,11 @@ import (
 	"strings"
 )
 
-// Key identifies a keyboard scan code and whether it uses the extended prefix.
+// Key identifies a keyboard scan code or a Windows virtual-key code.
 type Key struct {
-	ScanCode uint16
-	Extended bool
+	ScanCode       uint16
+	Extended       bool
+	VirtualKeyCode uint16
 }
 
 const (
@@ -138,6 +139,34 @@ const (
 	Power      = 0x5E
 	Sleep      = 0x5F
 	Wake       = 0x63
+)
+
+const (
+	VirtualKeyCancel           = 0x03
+	VirtualKeyClear            = 0x0C
+	VirtualKeyPause            = 0x13
+	VirtualKeySelect           = 0x29
+	VirtualKeyExecute          = 0x2B
+	VirtualKeyHelp             = 0x2F
+	VirtualKeyZoom             = 0xFB
+	VirtualKeyBrowserBack      = 0xA6
+	VirtualKeyBrowserForward   = 0xA7
+	VirtualKeyBrowserRefresh   = 0xA8
+	VirtualKeyBrowserStop      = 0xA9
+	VirtualKeyBrowserSearch    = 0xAA
+	VirtualKeyBrowserFavorites = 0xAB
+	VirtualKeyBrowserHome      = 0xAC
+	VirtualKeyVolumeMute       = 0xAD
+	VirtualKeyVolumeDown       = 0xAE
+	VirtualKeyVolumeUp         = 0xAF
+	VirtualKeyMediaNext        = 0xB0
+	VirtualKeyMediaPrevious    = 0xB1
+	VirtualKeyMediaStop        = 0xB2
+	VirtualKeyMediaPlayPause   = 0xB3
+	VirtualKeyLaunchMail       = 0xB4
+	VirtualKeyLaunchMedia      = 0xB5
+	VirtualKeyLaunchApp1       = 0xB6
+	VirtualKeyLaunchApp2       = 0xB7
 )
 
 var canonical = map[Key]string{
@@ -272,6 +301,54 @@ var canonical = map[Key]string{
 	{ScanCode: Wake, Extended: true}:        "wake",
 	{ScanCode: Enter, Extended: true}:       "kpenter",
 	{ScanCode: Slash, Extended: true}:       "kp/",
+
+	{VirtualKeyCode: VirtualKeyCancel}:           "break",
+	{VirtualKeyCode: VirtualKeyClear}:            "clear",
+	{VirtualKeyCode: VirtualKeyPause}:            "pause",
+	{VirtualKeyCode: VirtualKeySelect}:           "select",
+	{VirtualKeyCode: VirtualKeyExecute}:          "execute",
+	{VirtualKeyCode: VirtualKeyHelp}:             "help",
+	{VirtualKeyCode: VirtualKeyZoom}:             "zoom",
+	{VirtualKeyCode: VirtualKeyBrowserBack}:      "browserback",
+	{VirtualKeyCode: VirtualKeyBrowserForward}:   "browserforward",
+	{VirtualKeyCode: VirtualKeyBrowserRefresh}:   "browserrefresh",
+	{VirtualKeyCode: VirtualKeyBrowserStop}:      "browserstop",
+	{VirtualKeyCode: VirtualKeyBrowserSearch}:    "browsersearch",
+	{VirtualKeyCode: VirtualKeyBrowserFavorites}: "browserfavorites",
+	{VirtualKeyCode: VirtualKeyBrowserHome}:      "browserhome",
+	{VirtualKeyCode: VirtualKeyVolumeMute}:       "volumemute",
+	{VirtualKeyCode: VirtualKeyVolumeDown}:       "volumedown",
+	{VirtualKeyCode: VirtualKeyVolumeUp}:         "volumeup",
+	{VirtualKeyCode: VirtualKeyMediaNext}:        "medianext",
+	{VirtualKeyCode: VirtualKeyMediaPrevious}:    "mediaprev",
+	{VirtualKeyCode: VirtualKeyMediaStop}:        "mediastop",
+	{VirtualKeyCode: VirtualKeyMediaPlayPause}:   "mediaplaypause",
+	{VirtualKeyCode: VirtualKeyLaunchMail}:       "launchmail",
+	{VirtualKeyCode: VirtualKeyLaunchMedia}:      "launchmedia",
+	{VirtualKeyCode: VirtualKeyLaunchApp1}:       "launchapp1",
+	{VirtualKeyCode: VirtualKeyLaunchApp2}:       "launchapp2",
+}
+
+// supported virtual-key codes set.
+var virtualKeyCodes = map[uint16]struct{}{
+	VirtualKeyCancel: {}, VirtualKeyClear: {}, VirtualKeyPause: {},
+	VirtualKeySelect: {}, VirtualKeyExecute: {}, VirtualKeyHelp: {},
+	VirtualKeyZoom: {}, VirtualKeyBrowserBack: {}, VirtualKeyBrowserForward: {},
+	VirtualKeyBrowserRefresh: {}, VirtualKeyBrowserStop: {}, VirtualKeyBrowserSearch: {},
+	VirtualKeyBrowserFavorites: {}, VirtualKeyBrowserHome: {}, VirtualKeyVolumeMute: {},
+	VirtualKeyVolumeDown: {}, VirtualKeyVolumeUp: {}, VirtualKeyMediaNext: {},
+	VirtualKeyMediaPrevious: {}, VirtualKeyMediaStop: {}, VirtualKeyMediaPlayPause: {},
+	VirtualKeyLaunchMail: {}, VirtualKeyLaunchMedia: {}, VirtualKeyLaunchApp1: {},
+	VirtualKeyLaunchApp2: {},
+}
+
+// New creates a Key, preferring a supported virtual-key code and otherwise
+// using the scan code and extended flag.
+func New(virtualKeyCode, scanCode uint16, extended bool) Key {
+	if _, ok := virtualKeyCodes[virtualKeyCode]; ok {
+		return Key{VirtualKeyCode: virtualKeyCode}
+	}
+	return Key{ScanCode: scanCode, Extended: extended}
 }
 
 // Lookup returns the scan code for a configured key name.
@@ -287,6 +364,9 @@ func Lookup(name string) (Key, bool) {
 func Name(key Key) string {
 	if name, ok := canonical[key]; ok {
 		return name
+	}
+	if key.VirtualKeyCode != 0 {
+		return fmt.Sprintf("0xVK%X", key.VirtualKeyCode)
 	}
 	return fmt.Sprintf("0x%X", key.ScanCode)
 }
