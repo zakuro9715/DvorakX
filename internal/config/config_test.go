@@ -355,8 +355,8 @@ func TestParseReportsTomlSyntaxErrorPosition(t *testing.T) {
 }
 
 func TestParseRejectsUnknownKey(t *testing.T) {
-	_, err := Parse([]byte("[global]\nremaps = [{ capslock = 'ctrl' }]\n"))
-	if err == nil || !hasErrorMessage(err, `unsupported remap source key "capslock"`) {
+	_, err := Parse([]byte("[global]\nremaps = [{ not-a-key = 'ctrl' }]\n"))
+	if err == nil || !hasErrorMessage(err, `unsupported remap source key "not-a-key"`) {
 		t.Fatalf("Parse() error = %v, want unsupported key error", err)
 	}
 }
