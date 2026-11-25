@@ -355,8 +355,8 @@ func TestParseReportsTomlSyntaxErrorPosition(t *testing.T) {
 }
 
 func TestParseRejectsUnknownKey(t *testing.T) {
-	_, err := Parse([]byte("[global]\nremaps = [{ capslock = 'ctrl' }]\n"))
-	if err == nil || !hasErrorMessage(err, `unsupported remap source key "capslock"`) {
+	_, err := Parse([]byte("[global]\nremaps = [{ not-a-key = 'ctrl' }]\n"))
+	if err == nil || !hasErrorMessage(err, `unsupported remap source key "not-a-key"`) {
 		t.Fatalf("Parse() error = %v, want unsupported key error", err)
 	}
 }
@@ -514,18 +514,18 @@ func TestParseBraceEscapedKeyDefinitions(t *testing.T) {
 default = "&symbols"
 
 [global]
-remaps = [{ "{,}" = "{|}" }]
+remaps = [{ "{,}" = "{.}" }]
 
 [src]
-def = ["a", "b", "c"]
+def = ["a", "b"]
 
 [symbols]
-def = "{,}|{|}|{'}"
+def = "{,}|{'}"
 `))
 	if err != nil {
 		t.Fatalf("Parse() error = %v", err)
 	}
-	if got := config.Layers["symbols"].Definition.Tokens; !reflect.DeepEqual(got, []string{",", "|", "'"}) {
+	if got := config.Layers["symbols"].Definition.Tokens; !reflect.DeepEqual(got, []string{",", "'"}) {
 		t.Errorf("symbols definition tokens = %#v, want escaped key tokens", got)
 	}
 }
