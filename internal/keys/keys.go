@@ -1,7 +1,10 @@
 // Package keys defines configured key names and keyboard scan codes.
 package keys
 
-import "strings"
+import (
+	"fmt"
+	"strings"
+)
 
 // Key identifies a keyboard scan code and whether it uses the extended prefix.
 type Key struct {
@@ -152,7 +155,7 @@ func Name(key Key) string {
 			return string(rune('a' + index))
 		}
 	}
-	return ""
+	return fmt.Sprintf("0x%X", key.ScanCode)
 }
 
 var (

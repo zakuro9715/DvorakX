@@ -28,3 +28,9 @@ func TestLookup(t *testing.T) {
 		})
 	}
 }
+
+func TestNameUnknownKey(t *testing.T) {
+	if got := Name(Key{ScanCode: 0x99}); got != "0x99" {
+		t.Errorf("Name(0x99) = %q, want %q", got, "0x99")
+	}
+}
