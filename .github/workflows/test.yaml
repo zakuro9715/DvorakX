@@ -14,7 +14,7 @@ env:
   DVORAKX_E2E: 1
 
 jobs:
-  test-ubuntu:
+  test:
     strategy:
       matrix:
         os: [ubuntu-latest, windows-latest]
