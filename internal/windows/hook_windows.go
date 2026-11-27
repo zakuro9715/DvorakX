@@ -25,16 +25,19 @@ const (
 	injectionMarker      = 0x44564B52
 )
 
+type procedure interface{ Addr() uintptr }
+
 var (
-	user32                  = syscall.NewLazyDLL("user32.dll")
-	procCallNextHookEx      = user32.NewProc("CallNextHookEx")
-	procGetMessageW         = user32.NewProc("GetMessageW")
-	procPostThreadMessageW  = user32.NewProc("PostThreadMessageW")
-	procSendInput           = user32.NewProc("SendInput")
-	procSetWindowsHookExW   = user32.NewProc("SetWindowsHookExW")
-	procUnhookWindowsHookEx = user32.NewProc("UnhookWindowsHookEx")
-	kernel32                = syscall.NewLazyDLL("kernel32.dll")
-	procGetCurrentThreadID  = kernel32.NewProc("GetCurrentThreadId")
+	user32                            = syscall.NewLazyDLL("user32.dll")
+	kernel32                          = syscall.NewLazyDLL("kernel32.dll")
+	procCallNextHookEx      procedure = user32.NewProc("CallNextHookEx")
+	procGetMessageW         procedure = user32.NewProc("GetMessageW")
+	procPeekMessageW        procedure = user32.NewProc("PeekMessageW")
+	procPostThreadMessageW  procedure = user32.NewProc("PostThreadMessageW")
+	procSendInput           procedure = user32.NewProc("SendInput")
+	procSetWindowsHookExW   procedure = user32.NewProc("SetWindowsHookExW")
+	procUnhookWindowsHookEx procedure = user32.NewProc("UnhookWindowsHookEx")
+	procGetCurrentThreadID  procedure = kernel32.NewProc("GetCurrentThreadId")
 )
 
 type keyboardInput struct {
@@ -60,6 +63,7 @@ type message struct {
 	LParam  uintptr
 	Time    uint32
 	Point   point
+	_       uint32
 }
 
 type point struct {
@@ -89,7 +93,7 @@ func (o output) Send(event keyboard.Event) error {
 		Type: inputKeyboard,
 		Ki:   inputKey,
 	}
-	sent, _, err := procSendInput.Call(1, uintptr(unsafe.Pointer(&eventInput)), unsafe.Sizeof(eventInput))
+	sent, _, err := syscall.SyscallN(procSendInput.Addr(), 1, uintptr(unsafe.Pointer(&eventInput)), unsafe.Sizeof(eventInput))
 	if sent == 0 {
 		return err
 	}
@@ -101,10 +105,11 @@ func Run(mappings *keyboard.Mappings, stop <-chan struct{}, debugOutput io.Write
 	runtime.LockOSThread()
 	defer runtime.UnlockOSThread()
 
-	threadID, _, _ := procGetCurrentThreadID.Call()
+	threadID, _, _ := syscall.SyscallN(procGetCurrentThreadID.Addr())
 	debugf(debugOutput, "keyboard hook starting on thread %d", threadID)
 	simulated := keyboard.NewSimulatedKeyboard(mappings, output{})
-	callback := func(code int, wParam uintptr, event *keyboardHook) uintptr {
+	callback := func(rawCode uintptr, wParam uintptr, event *keyboardHook) uintptr {
+		code := int(int32(rawCode))
 		if code < 0 {
 			return callNext(code, wParam, event)
 		}
@@ -136,28 +141,42 @@ func Run(mappings *keyboard.Mappings, stop <-chan struct{}, debugOutput io.Write
 		return 1
 	}
 
-	hook, _, err := procSetWindowsHookExW.Call(whKeyboardLL, syscall.NewCallback(callback), 0, 0)
+	var msg message
+	if stop != nil {
+		// Ensure WM_QUIT can be posted even when stop is already closed.
+		_, _, _ = syscall.SyscallN(procPeekMessageW.Addr(), uintptr(unsafe.Pointer(&msg)), 0, 0, 0, 0)
+	}
+	hook, _, err := syscall.SyscallN(procSetWindowsHookExW.Addr(), whKeyboardLL, syscall.NewCallback(callback), 0, 0)
 	if hook == 0 {
 		return fmt.Errorf("install low-level keyboard hook: %w", err)
 	}
 	debugf(debugOutput, "keyboard hook installed")
 	defer func() {
-		_, _, _ = procUnhookWindowsHookEx.Call(hook)
+		_, _, _ = syscall.SyscallN(procUnhookWindowsHookEx.Addr(), hook)
 		debugf(debugOutput, "keyboard hook stopped")
 	}()
 
 	if stop != nil {
+		done := make(chan struct{})
+		joined := make(chan struct{})
 		go func() {
-			<-stop
-			_, _, _ = procPostThreadMessageW.Call(threadID, wmQuit, 0, 0)
+			defer close(joined)
+			select {
+			case <-stop:
+				_, _, _ = syscall.SyscallN(procPostThreadMessageW.Addr(), threadID, wmQuit, 0, 0)
+			case <-done:
+			}
+		}()
+		defer func() {
+			close(done)
+			<-joined
 		}()
 	}
 
-	var msg message
 	for {
-		result, _, err := procGetMessageW.Call(uintptr(unsafe.Pointer(&msg)), 0, 0, 0)
-		switch result {
-		case ^uintptr(0):
+		result, _, err := syscall.SyscallN(procGetMessageW.Addr(), uintptr(unsafe.Pointer(&msg)), 0, 0, 0)
+		switch int32(result) {
+		case -1:
 			return fmt.Errorf("read Windows message: %w", err)
 		case 0:
 			return nil
@@ -166,7 +185,7 @@ func Run(mappings *keyboard.Mappings, stop <-chan struct{}, debugOutput io.Write
 }
 
 func callNext(code int, wParam uintptr, event *keyboardHook) uintptr {
-	result, _, _ := procCallNextHookEx.Call(0, uintptr(code), wParam, uintptr(unsafe.Pointer(event)))
+	result, _, _ := syscall.SyscallN(procCallNextHookEx.Addr(), 0, uintptr(code), wParam, uintptr(unsafe.Pointer(event)))
 	return result
 }
 
