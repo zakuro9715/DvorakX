@@ -1,4 +1,4 @@
-//go:build windows && (amd64 || arm64)
+//go:build windows && e2e
 
 package e2e_test
 

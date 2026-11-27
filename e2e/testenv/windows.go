@@ -1,4 +1,4 @@
-//go:build windows && (amd64 || arm64)
+//go:build windows && e2e
 
 // Package testenv provides the Windows environment used by keyboard-hook E2E tests.
 package testenv
@@ -86,9 +86,6 @@ type Environment struct {
 // Start builds and runs DvorakZ with config, then creates a focused input window.
 func Start(t *testing.T, config string) *Environment {
 	t.Helper()
-	if os.Getenv("DVORAKZ_E2E") != "1" {
-		t.Skip("set DVORAKZ_E2E=1 to run the Windows keyboard-hook E2E test")
-	}
 
 	e2eMutex.Lock()
 	t.Cleanup(e2eMutex.Unlock)
