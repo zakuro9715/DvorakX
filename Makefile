@@ -1,3 +1,5 @@
+prepare:
+	npx skill install
 build.win:
 	GOOS=windows make build
 build:

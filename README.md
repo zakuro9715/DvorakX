@@ -30,6 +30,10 @@ events:
 - go tool lefthook install
 - [golangci-lint](https://golangci-lint.run/docs/welcome/install/local/)
 
+```
+make prepare
+```
+
 ### Windows E2E test
 
 The keyboard-hook E2E test builds the executable, temporarily installs its

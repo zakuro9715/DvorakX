@@ -34,3 +34,6 @@ go.work.sum
 
 # temporary config
 /*.toml
+
+# skills (use skills.lock)
+.agents/skills
