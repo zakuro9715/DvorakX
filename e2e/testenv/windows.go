@@ -94,10 +94,12 @@ func Start(t *testing.T, config string) *Environment {
 
 	environment := &Environment{t: t}
 	environment.window = createReceiverWindow(t)
+	t.Logf("created receiver window %#x", environment.window)
 	t.Cleanup(func() {
 		_, _, _ = procDestroyWindow.Call(environment.window)
 	})
 	focusWindow(t, environment.window)
+	t.Log("focused receiver window")
 	startRemapper(t, config)
 	return environment
 }
@@ -115,6 +117,7 @@ func (environment *Environment) AssertShiftedKey(source, want string) {
 func (environment *Environment) assertKey(source, want string, shifted bool) {
 	environment.t.Helper()
 
+	environment.t.Logf("send key %q (shift=%t), want %q", source, shifted, want)
 	scanKey := scanKey(environment.t, source)
 	empty, err := syscall.UTF16PtrFromString("")
 	if err != nil {
@@ -136,6 +139,7 @@ func (environment *Environment) assertKey(source, want string, shifted bool) {
 	for time.Now().Before(deadline) {
 		pumpMessages()
 		if got := windowText(environment.t, environment.window); got == want {
+			environment.t.Logf("receiver text matched %q", got)
 			return
 		}
 		time.Sleep(10 * time.Millisecond)
@@ -186,6 +190,7 @@ func startRemapper(t *testing.T, config string) {
 	executablePath := filepath.Join(tempDirectory, "dvorakz.exe")
 	build := exec.Command("go", "build", "-o", executablePath, "./cmd/dvorakz")
 	build.Dir = root
+	t.Log("building remapper")
 	if output, err := build.CombinedOutput(); err != nil {
 		t.Fatalf("build remapper: %v\n%s", err, output)
 	}
@@ -200,40 +205,58 @@ func startRemapper(t *testing.T, config string) {
 	if err != nil {
 		t.Fatalf("create remapper stderr pipe: %v", err)
 	}
+	t.Log("starting remapper")
 	if err := command.Start(); err != nil {
+		_ = stderr.Close()
 		t.Fatalf("start remapper: %v", err)
 	}
-	t.Cleanup(func() {
-		stopRemapper(t, command)
-	})
-
 	installed := make(chan struct{})
+	stderrDone := make(chan struct{})
+	var scanErr error
 	go func() {
+		defer close(stderrDone)
 		scanner := bufio.NewScanner(stderr)
+		ready := false
 		for scanner.Scan() {
-			if strings.Contains(scanner.Text(), "keyboard hook installed") {
+			line := scanner.Text()
+			t.Logf("remapper: %s", line)
+			if !ready && strings.Contains(line, "keyboard hook installed") {
+				ready = true
 				close(installed)
-				return
 			}
 		}
+		scanErr = scanner.Err()
 	}()
+	t.Cleanup(func() {
+		stopRemapper(t, command, stderrDone)
+		if scanErr != nil {
+			t.Errorf("read remapper stderr: %v", scanErr)
+		}
+	})
 
 	select {
 	case <-installed:
+	case <-stderrDone:
+		if scanErr != nil {
+			t.Fatalf("wait for keyboard hook: %v", scanErr)
+		}
+		t.Fatal("remapper stderr closed while waiting for the keyboard hook")
 	case <-time.After(5 * time.Second):
 		t.Fatal("remapper did not install its keyboard hook within 5 seconds")
 	}
 }
 
-func stopRemapper(t *testing.T, command *exec.Cmd) {
+func stopRemapper(t *testing.T, command *exec.Cmd, stderrDone <-chan struct{}) {
 	t.Helper()
 
 	if command.Process == nil {
 		return
 	}
+	t.Log("stopping remapper")
 	if err := command.Process.Kill(); err != nil && !errors.Is(err, os.ErrProcessDone) {
 		t.Errorf("stop remapper: %v", err)
 	}
+	<-stderrDone
 	if err := command.Wait(); err != nil {
 		if _, ok := errors.AsType[*exec.ExitError](err); !ok {
 			t.Errorf("wait for remapper: %v", err)
