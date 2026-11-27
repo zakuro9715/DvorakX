@@ -14,7 +14,7 @@ env:
   DVORAKX_E2E: 1
 
 jobs:
-  test-ubuntu:
+  test:
     strategy:
       matrix:
         os: [ubuntu-latest, windows-latest]
@@ -23,7 +23,7 @@ jobs:
       - uses: actions/checkout@v7
       - uses: ./.github/actions/setup
       - name: Test
-        run: go test -v ./... -coverprofile=coverage.out -covermode=atomic
+        run: go test -v ./... -tags=e2e -coverprofile=coverage.out -covermode=atomic
       - name: Upload coverage
         uses: codecov/codecov-action@v7
         with:
