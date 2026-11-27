@@ -37,3 +37,8 @@ run `golintci-lint run` to check code style.
 - Add documentation comments to exported APIs.
 - Write the key name next to hard-coded key codes.
 
+## Check list
+
+- Run `make lint`
+- Run `make test.cov`
+- RUN `make test.win.cov` when change windows code.
