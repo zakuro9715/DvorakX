@@ -6,6 +6,7 @@ DvorakZ is keyboard remaper.
 
 - Don't edit README.md without instruction.
 - Write doc if necessary.
+- Do not prioritize compatibility with existing code; breaking changes are acceptable for any change when appropriate.
 
 ## Core Concept
 
