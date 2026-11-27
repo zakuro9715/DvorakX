@@ -34,22 +34,6 @@ events:
 make prepare
 ```
 
-### Windows E2E test
-
-The keyboard-hook E2E test builds the executable, temporarily installs its
-global hook, and verifies that `a` and `b` are swapped in a test window. Run it
-only from an interactive Windows desktop:
-
-```powershell
-$env:DVORAKZ_E2E = "1"
-go test ./e2e
-```
-
-Additional cases can reuse `e2e/testenv`: call `testenv.Start(t, config)` and
-then `environment.AssertKey(source, destination)` or
-`environment.AssertShiftedKey(source, destination)`. The shifted number-key
-tests expect the US keyboard layout.
-
 ## Features
 
 ### Configuration
