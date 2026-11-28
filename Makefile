@@ -27,3 +27,7 @@ genhtml:
 	genhtml lcov.info --o coverage
 open-cov:
 	open coverage/index.html
+pkgsite:
+	go tool pkgsite
+pkgsite.watch:
+	watchexec -r -e go -- go tool pkgsite

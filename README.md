@@ -35,6 +35,17 @@ events:
 make prepare
 ```
 
+### pkgsite
+
+```sh
+make pkgsite
+```
+
+```sh
+# require watchexec
+make pkgsite.watch
+```
+
 ## Features
 
 ### Configuration
