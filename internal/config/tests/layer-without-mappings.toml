@@ -1,0 +1,10 @@
+[meta]
+default = '&base'
+[src]
+def = 'a b'
+[base]
+def = '_ _'
+# Output:
+# [layer-without-mappings.toml:6, 7]: config must define at least one mapping
+#    6 | def = '_ _'
+#      |       ^^^^^

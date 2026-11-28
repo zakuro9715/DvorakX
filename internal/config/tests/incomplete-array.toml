@@ -1,0 +1,6 @@
+[global]
+remaps = [
+# Output:
+# [incomplete-array.toml:2, 11]: array is incomplete
+#    2 | remaps = [
+#      |           ^

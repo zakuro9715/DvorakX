@@ -1,0 +1,11 @@
+[meta]
+default = '&base'
+[src]
+def = 'a b'
+[base]
+def = "a\tinvalid-key"
+
+# Output:
+# [invalid-key-after-escaped-tab.toml:6, 11]: unsupported layer key "invalid-key"
+#    6 | def = "a\tinvalid-key"
+#      |           ^^^^^^^^^^^

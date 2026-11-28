@@ -1,0 +1,14 @@
+[meta]
+default = '&base'
+[src]
+def = 'a b'
+[base]
+def = '''
+ a
+ invalid-key
+'''
+
+# Output:
+# [invalid-multiline-key-after-valid-line.toml:8, 2]: unsupported layer key "invalid-key"
+#    8 |  invalid-key
+#      |  ^^^^^^^^^^^

@@ -1,0 +1,11 @@
+[meta]
+default = '&base'
+[src]
+def = ['a', 'b']
+[base]
+def = ['a', 'invalid-key']
+
+# Output:
+# [invalid-array-key.toml:6, 13]: unsupported layer key "invalid-key"
+#    6 | def = ['a', 'invalid-key']
+#      |             ^^^^^^^^^^^^^

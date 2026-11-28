@@ -6,9 +6,11 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strings"
 	"syscall"
 	"time"
+	"unicode/utf8"
 
 	urfavecli "github.com/urfave/cli/v3"
 
@@ -51,7 +53,7 @@ func run(ctx context.Context, configPath string, debug bool, runner Runner) erro
 	if err != nil {
 		return fmt.Errorf("resolve executable path: %w", err)
 	}
-	configPath, err = config.ResolveConfigPath(configPath, executablePath)
+	configPath, err = resolveConfigPath(configPath, executablePath)
 	if err != nil {
 		return err
 	}
@@ -59,10 +61,7 @@ func run(ctx context.Context, configPath string, debug bool, runner Runner) erro
 	if err != nil {
 		return err
 	}
-	mappings, err := keyboard.NewMappingsFromConfig(loaded)
-	if err != nil {
-		return fmt.Errorf("prepare config: %w", err)
-	}
+	mappings := keyboard.NewMappingsFromConfig(loaded)
 	if debug {
 		fmt.Fprintf(os.Stderr, "dvorakz: debug: loaded config from %s\n", configPath)
 	}
@@ -125,13 +124,8 @@ func watchConfig(path, displayPath string, mappings *keyboard.Mappings, stop <-c
 			}
 			previous = current
 
-			loaded, err := loadConfig(path, displayPath)
-			if err != nil {
-				fmt.Fprintln(os.Stderr, formatConfigError("reload", path, err, colorOutput(os.Stderr)))
-				continue
-			}
-			if err := mappings.ReplaceConfig(loaded); err != nil {
-				fmt.Fprintln(os.Stderr, formatConfigError("reload", path, err, colorOutput(os.Stderr)))
+			if err := reloadConfig(path, displayPath, mappings); err != nil {
+				fmt.Fprintln(os.Stderr, formatReloadError(path, err, colorOutput(os.Stderr)))
 				continue
 			}
 			if debug {
@@ -141,27 +135,96 @@ func watchConfig(path, displayPath string, mappings *keyboard.Mappings, stop <-c
 	}
 }
 
+func reloadConfig(path, displayPath string, mappings *keyboard.Mappings) error {
+	loaded, err := loadConfig(path, displayPath)
+	if err != nil {
+		return err
+	}
+	mappings.ReplaceConfig(loaded)
+	return nil
+}
+
 func loadConfig(path, displayPath string) (config.Config, error) {
 	loaded, err := parser.LoadFile(path)
-	if diagnostics, ok := errors.AsType[*parser.DiagnosticsError](err); ok && displayPath != "" {
-		for index := range diagnostics.Items {
-			diagnostics.Items[index].Path = displayPath
-		}
+	if err != nil && displayPath != "" {
+		return loaded, &configDisplayError{error: err, path: displayPath}
 	}
 	return loaded, err
 }
 
-//nolint:unparam
-func formatConfigError(operation, path string, err error, colors ...bool) string {
-	color := len(colors) > 0 && colors[0]
-	formatter := parser.PrettyFormatter{Color: color}
-	var output strings.Builder
-	if diagnostics, ok := errors.AsType[*parser.DiagnosticsError](err); ok {
-		fmt.Fprintf(&output, "dvorakz: %s config %q:\n", operation, path)
-		_ = formatter.FormatTo(&output, diagnostics.Items)
-		return output.String()
+type configDisplayError struct {
+	error
+	path string
+}
+
+func (e *configDisplayError) Unwrap() error { return e.error }
+
+// FormatError renders a command failure for display on standard error.
+func FormatError(err error, color bool) string {
+	if message, ok := formatLocatedErrors(err, color); ok {
+		return message
 	}
-	prefix := fmt.Sprintf("dvorakz: %s config %q", operation, path)
+	return fmt.Sprintf("dvorakz: %s", err)
+}
+
+type locatedError interface {
+	error
+	Location() parser.Location
+}
+
+func formatLocatedErrors(err error, color bool) (string, bool) {
+	var issues []error
+	if validation, ok := errors.AsType[*parser.ValidationError](err); ok {
+		issues = validation.Unwrap()
+	} else if syntax, ok := errors.AsType[*parser.SyntaxError](err); ok {
+		issues = []error{syntax}
+	}
+	if len(issues) == 0 {
+		return "", false
+	}
+	display, hasDisplay := errors.AsType[*configDisplayError](err)
+	var output strings.Builder
+	for _, issue := range issues {
+		located, ok := errors.AsType[locatedError](issue)
+		if !ok {
+			continue
+		}
+		at := located.Location()
+		if hasDisplay {
+			at.Path = display.path
+		}
+		if output.Len() > 0 {
+			output.WriteString("\n")
+		}
+		writeLocatedError(&output, at, located.Error(), color)
+	}
+	return output.String(), true
+}
+
+func writeLocatedError(output *strings.Builder, at parser.Location, message string, color bool) {
+	heading := fmt.Sprintf("[%s:%d, %d]: %s", at.Path, at.Line, at.Column, message)
+	offset := min(max(0, at.Column-1), len(at.Text))
+	prefix := strings.Map(func(r rune) rune {
+		if r == '\t' {
+			return r
+		}
+		return ' '
+	}, at.Text[:offset])
+	end := offset + min(max(0, at.Length), len(at.Text)-offset)
+	marker := prefix + strings.Repeat("^", max(1, utf8.RuneCountInString(at.Text[offset:end])))
+	if color {
+		heading = "\x1b[31m" + heading + "\x1b[0m"
+		marker = "\x1b[31m" + marker + "\x1b[0m"
+	}
+	fmt.Fprintf(output, "%s\n%4d | %s\n     | %s", heading, at.Line, at.Text, marker)
+}
+
+func formatReloadError(path string, err error, colors ...bool) string {
+	color := len(colors) > 0 && colors[0]
+	if message, ok := formatLocatedErrors(err, color); ok {
+		return fmt.Sprintf("dvorakz: reload config %q:\n%s", path, message)
+	}
+	prefix := fmt.Sprintf("dvorakz: reload config %q", path)
 	lines := strings.Split(err.Error(), "\n")
 	for index, line := range lines {
 		lines[index] = prefix + ": " + line
@@ -175,4 +238,14 @@ func colorOutput(file *os.File) bool {
 	}
 	info, err := file.Stat()
 	return err == nil && info.Mode()&os.ModeCharDevice != 0
+}
+
+func resolveConfigPath(explicitPath, executablePath string) (string, error) {
+	if explicitPath != "" {
+		return filepath.Clean(explicitPath), nil
+	}
+	if executablePath == "" {
+		return "", errors.New("resolve default config path: executable path is empty")
+	}
+	return filepath.Join(filepath.Dir(executablePath), "config.toml"), nil
 }

@@ -152,10 +152,7 @@ func (environment *Environment) expect(text string) *Environment {
 
 func (environment *Environment) replaceConfig(loaded config.Config) {
 	environment.t.Helper()
-	mappings, err := keyboard.NewMappingsFromConfig(loaded)
-	if err != nil {
-		environment.t.Fatalf("prepare test configuration: %v", err)
-	}
+	mappings := keyboard.NewMappingsFromConfig(loaded)
 	environment.keyboard = keyboard.NewSimulatedKeyboard(mappings, environment.output)
 	environment.output.events = nil
 }

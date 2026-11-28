@@ -1,16 +1,18 @@
 # Testing
 
-## Example
+## Simulate
+
+### Example
 
 [testing/example_test.go](../testing/example_test.go)
 
-## API
+### API
 
 ```
 go doc -all testing/env
 ```
 
-### DSL
+#### DSL
 
 Shared DSL to describe key event for Methods.
 
@@ -22,6 +24,22 @@ a      # same as `key:down key:up`
 0x30   # scan code in hex
 
 a b c  # events are separated by space
+```
+
+## Config Error Tests
+
+Add a `.toml` file to [`internal/config/tests`](../internal/config/tests).
+Place the exact CLI output after `# Output:`, with each line
+prefixed by `# `. Preserve the output's indentation.
+
+```toml
+[global]
+remaps = { "1" = 2 }
+
+# Output:
+# [sample.toml:2, 18]: invalid remap destination: expected string, got number
+#    2 | remaps = { "1" = 2 }
+#      |                  ^
 ```
 
 ## HTML Coverage

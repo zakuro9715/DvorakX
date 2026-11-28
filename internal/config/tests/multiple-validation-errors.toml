@@ -1,0 +1,11 @@
+[global]
+hotkeys = []
+remaps = [{ unknown = 'ctrl' }]
+
+# Output:
+# [multiple-validation-errors.toml:2, 1]: unsupported [global] field "hotkeys"
+#    2 | hotkeys = []
+#      | ^^^^^^^
+# [multiple-validation-errors.toml:3, 13]: unsupported remap source key "unknown"
+#    3 | remaps = [{ unknown = 'ctrl' }]
+#      |             ^^^^^^^

@@ -1,0 +1,11 @@
+[global.remaps]
+a = [{key = ']}'}, # ]}
+     ['[']]
+b = {key = ['}', {inner = ']'}]}
+# Output:
+# [nested-remap-values.toml:2, 5]: invalid remap destination: expected string, got array
+#    2 | a = [{key = ']}'}, # ]}
+#      |     ^^^^^^^^^^^^^^^^^^^
+# [nested-remap-values.toml:4, 5]: invalid remap destination: expected string, got table
+#    4 | b = {key = ['}', {inner = ']'}]}
+#      |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^

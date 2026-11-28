@@ -1,0 +1,40 @@
+[meta]
+default = '&base'
+[src]
+def = 'a b'
+[base]
+def = '#src'
+[unclosed]
+def = 'a {b'
+[nested]
+def = '{{a}} b'
+[empty]
+def = '{} b'
+[unexpected]
+def = '} b'
+[adjacent]
+def = 'a{b}'
+[array]
+def = ['{a', '{{b}}']
+# Output:
+# [invalid-definition-escapes.toml:8, 10]: unclosed {
+#    8 | def = 'a {b'
+#      |          ^^
+# [invalid-definition-escapes.toml:10, 9]: nested { is not allowed
+#   10 | def = '{{a}} b'
+#      |         ^
+# [invalid-definition-escapes.toml:12, 8]: {} is not allowed
+#   12 | def = '{} b'
+#      |        ^^
+# [invalid-definition-escapes.toml:14, 8]: unexpected }
+#   14 | def = '} b'
+#      |        ^
+# [invalid-definition-escapes.toml:16, 9]: { must start a key definition
+#   16 | def = 'a{b}'
+#      |         ^
+# [invalid-definition-escapes.toml:18, 8]: "{a" must be enclosed by one pair of braces
+#   18 | def = ['{a', '{{b}}']
+#      |        ^^^^
+# [invalid-definition-escapes.toml:18, 14]: "{{b}}" contains invalid braces
+#   18 | def = ['{a', '{{b}}']
+#      |              ^^^^^^^

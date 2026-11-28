@@ -1,0 +1,8 @@
+[[global.remaps]]
+a = 'b'
+[[global.remaps]]
+b = false
+# Output:
+# [remap-array-table-error.toml:4, 5]: invalid remap destination: expected string, got boolean
+#    4 | b = false
+#      |     ^^^^^

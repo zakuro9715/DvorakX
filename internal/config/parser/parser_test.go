@@ -2,11 +2,12 @@ package parser
 
 import (
 	"errors"
-	"reflect"
+	"slices"
 	"strings"
 	"testing"
 
 	"github.com/zakuro9715/DvorakZ/internal/config"
+	"github.com/zakuro9715/DvorakZ/internal/keys"
 )
 
 func TestParseRemapsArrayMergesEntries(t *testing.T) {
@@ -20,12 +21,12 @@ remaps = [
 	if err != nil {
 		t.Fatalf("Parse() error = %v", err)
 	}
-	if len(loaded.Global.Remaps) != 2 || loaded.Global.Remaps[1]["a"] != "c" {
-		t.Errorf("Global.Remaps = %#v, want ordered raw remap tables", loaded.Global.Remaps)
-	}
+	assertDestination(t, loaded.Global, "a", "c")
+	assertDestination(t, loaded.Global, "b", "d")
+	assertDestination(t, loaded.Global, "caps", "ctrl")
 }
 
-func TestParsePreservesConfigurationStructure(t *testing.T) {
+func TestParseResolvesConfigurationStructure(t *testing.T) {
 	loaded, err := Parse([]byte(`
 [meta]
 default = "&base"
@@ -48,28 +49,13 @@ disable = { noop = [] }
 	if err != nil {
 		t.Fatalf("Parse() error = %v", err)
 	}
-	if loaded.Meta.Default != "&base" {
-		t.Errorf("Meta.Default = %q, want &base", loaded.Meta.Default)
+	if loaded.DefaultLayer != "base" || len(loaded.Layers) != 1 {
+		t.Fatalf("unexpected layer selection: %#v", loaded)
 	}
-	if len(loaded.Global.Remaps) != 1 || loaded.Global.Remaps[0]["caps"] != "ctrl" {
-		t.Errorf("Global.Remaps = %#v, want the global remap table", loaded.Global.Remaps)
-	}
-	if got := loaded.Source.Definition.Keys; len(got) != 2 || got[0] != "a" || got[1] != "b" {
-		t.Errorf("Source.Definition.Keys = %#v, want [a b]", got)
-	}
-	base, ok := loaded.Layers["base"]
-	if !ok {
-		t.Fatal("Layers[base] is missing")
-	}
-	if base.Definition.Text != "#src" {
-		t.Errorf("base definition = %q, want #src", base.Definition.Text)
-	}
-	if base.Remaps[0]["x"] != "z" {
-		t.Errorf("base remaps = %#v, want x -> z", base.Remaps)
-	}
-	if base.Actions["disable"].Kind != config.NoopAction {
-		t.Errorf("base actions = %#v, want disable=noop", base.Actions)
-	}
+	assertDestination(t, loaded.Global, "caps", "ctrl")
+	assertDestination(t, loaded.Layers["base"].Definition, "a", "a")
+	assertDestination(t, loaded.Layers["base"].Definition, "b", "b")
+	assertDestination(t, loaded.Layers["base"].Remaps, "x", "z")
 }
 
 func TestParseRemapsTable(t *testing.T) {
@@ -81,9 +67,8 @@ a = "b"
 	if err != nil {
 		t.Fatalf("Parse() error = %v", err)
 	}
-	if len(loaded.Global.Remaps) != 1 || loaded.Global.Remaps[0]["a"] != "b" {
-		t.Errorf("Global.Remaps = %#v, want raw remap table", loaded.Global.Remaps)
-	}
+	assertDestination(t, loaded.Global, "a", "b")
+	assertDestination(t, loaded.Global, "caps", "ctrl")
 }
 
 func TestParseRemapsTableSupportsNoopAction(t *testing.T) {
@@ -97,12 +82,12 @@ disable = { noop = [] }
 	if err != nil {
 		t.Fatalf("Parse() error = %v", err)
 	}
-	if got := loaded.Global.Remaps[0]["x"]; got != "@disable" {
-		t.Fatalf("global remap x = %q, want @disable", got)
+	if got := loaded.Global[key("x")]; got.Kind != config.NoopAction {
+		t.Fatalf("binding = %#v, want noop", got)
 	}
 }
 
-func TestParseLayerRemapsApplyAfterDefinitionAndBeforeGlobal(t *testing.T) {
+func TestParseKeepsBindingStagesSeparate(t *testing.T) {
 	loaded, err := Parse([]byte(`
 [global.remaps]
 a = "d"
@@ -124,9 +109,9 @@ remaps = [
 	if err != nil {
 		t.Fatalf("Parse() error = %v", err)
 	}
-	if len(loaded.Layers["base"].Remaps) != 3 {
-		t.Fatalf("layer remaps = %#v, want three ordered definitions", loaded.Layers["base"].Remaps)
-	}
+	assertDestination(t, loaded.Layers["base"].Definition, "a", "b")
+	assertDestination(t, loaded.Layers["base"].Remaps, "a", "c")
+	assertDestination(t, loaded.Global, "a", "d")
 }
 
 func TestParseLayerRemapsUseLayerActions(t *testing.T) {
@@ -149,8 +134,8 @@ disable = { noop = [] }
 	if err != nil {
 		t.Fatalf("Parse() error = %v", err)
 	}
-	if got := loaded.Layers["base"].Remaps[0]["z"]; got != "@disable" {
-		t.Fatalf("layer remap z = %q, want @disable", got)
+	if got := loaded.Layers["base"].Remaps[key("z")]; got.Kind != config.NoopAction {
+		t.Fatalf("binding = %#v, want noop", got)
 	}
 }
 
@@ -197,8 +182,8 @@ disable = { noop = [] }
 	if err != nil {
 		t.Fatalf("Parse() error = %v", err)
 	}
-	if got := loaded.Global.Remaps[0]["caps"]; got != "@disable" {
-		t.Fatalf("global remap caps = %q, want @disable", got)
+	if got := loaded.Global[key("caps")]; got.Kind != config.NoopAction {
+		t.Fatalf("binding = %#v, want noop", got)
 	}
 }
 
@@ -214,12 +199,8 @@ paste = { send-keys = "ctrl v" }
 	if err != nil {
 		t.Fatalf("Parse() error = %v", err)
 	}
-	if got := loaded.Global.Remaps[0]["x"]; got != "@copy" {
-		t.Errorf("global remap x = %q, want @copy", got)
-	}
-	if got := loaded.Global.Actions["paste"].Kind; got != config.SendKeysAction {
-		t.Errorf("paste action kind = %v, want send-keys", got)
-	}
+	assertSequence(t, loaded.Global[key("x")], "ctrl", "c")
+	assertSequence(t, loaded.Global[key("y")], "ctrl", "v")
 }
 
 func TestParseRejectsInvalidSendKeysAction(t *testing.T) {
@@ -271,8 +252,8 @@ disable = { noop = [] }
 	if err != nil {
 		t.Fatalf("Parse() error = %v", err)
 	}
-	if got := loaded.Layers["base"].Definition.Keys[0]; got != "@disable" {
-		t.Fatalf("layer definition = %q, want @disable", got)
+	if got := loaded.Layers["base"].Definition[key("a")]; got.Kind != config.NoopAction {
+		t.Fatalf("binding = %#v, want noop", got)
 	}
 }
 
@@ -293,9 +274,7 @@ copy = { send-keys = "ctrl c" }
 	if err != nil {
 		t.Fatalf("Parse() error = %v", err)
 	}
-	if got := loaded.Layers["base"].Definition.Keys[0]; got != "@copy" {
-		t.Errorf("layer definition = %q, want @copy", got)
-	}
+	assertSequence(t, loaded.Layers["base"].Definition[key("a")], "ctrl", "c")
 }
 
 func TestParseRejectsUnknownAction(t *testing.T) {
@@ -310,11 +289,11 @@ remaps = [{ caps = "@missing" }]
 
 func TestParseFormatsDiagnosticWithSourceLine(t *testing.T) {
 	_, err := Parse([]byte("[global]\nhotkey = 'abc'\n"))
-	diagnostics, ok := errors.AsType[*DiagnosticsError](err)
-	if !ok || len(diagnostics.Items) != 1 {
+	issues, ok := validationIssues(err)
+	if !ok || len(issues) != 1 {
 		t.Fatalf("Parse() error = %v, want one structured error", err)
 	}
-	if got := diagnostics.Items[0]; got.SourceLine != "hotkey = 'abc'" || got.Line != 2 || got.Column != 1 {
+	if got := issues[0]; got.Location().Text != "hotkey = 'abc'" || got.Location().Line != 2 || got.Location().Column != 1 {
 		t.Fatalf("error = %#v, want source and position", got)
 	}
 }
@@ -336,22 +315,12 @@ func TestParseCollectsUnsupportedGlobalFields(t *testing.T) {
 
 func TestParseReportsTomlSyntaxErrorPosition(t *testing.T) {
 	_, err := Parse([]byte("[global]\nremaps = [{ caps = \"ctrl\" }\n"))
-	diagnostics, ok := errors.AsType[*DiagnosticsError](err)
-	if !ok {
-		t.Fatalf("Parse() error type = %T, want *DiagnosticsError", err)
+	syntax, ok := errors.AsType[*SyntaxError](err)
+	if !ok || errors.Unwrap(syntax) == nil {
+		t.Fatalf("Parse() = %v, want syntax error with decoder cause", err)
 	}
-	if len(diagnostics.Items) != 1 {
-		t.Fatalf("len(DiagnosticsError) = %d, want 1", len(diagnostics.Items))
-	}
-	diagnostic := diagnostics.Items[0]
-	if diagnostic.Line != 2 || diagnostic.Column < 1 {
-		t.Errorf("syntax diagnostic position = %d:%d, want line 2", diagnostic.Line, diagnostic.Column)
-	}
-	if diagnostic.Message == "" {
-		t.Errorf("syntax diagnostic message = %q, want a parser message", diagnostic.Message)
-	}
-	if diagnostic.Line != 2 || diagnostic.Column < 1 || diagnostic.Message == "" {
-		t.Errorf("error = %#v, want line, column, and message", diagnostic)
+	if at := syntax.Location(); at.Line != 2 || at.Column < 1 || syntax.Error() == "" {
+		t.Errorf("syntax error at %#v = %q, want line 2 and a message", at, syntax.Error())
 	}
 }
 
@@ -371,31 +340,31 @@ func TestParseRejectsInvalidRemapValue(t *testing.T) {
 
 func TestParseCollectsAllRemapErrorsWithPositions(t *testing.T) {
 	_, err := Parse([]byte("[global]\nremaps = [{ caps = 1, bad = 'invalid' }, { nope = 'ctrl' }]\n"))
-	diagnostics, ok := errors.AsType[*DiagnosticsError](err)
+	issues, ok := validationIssues(err)
 	if !ok {
-		t.Fatalf("Parse() error type = %T, want *DiagnosticsError", err)
+		t.Fatalf("Parse() error type = %T, want *DiagnosticReport", err)
 	}
-	if len(diagnostics.Items) != 3 {
-		t.Fatalf("len(DiagnosticsError) = %d, want 3: %v", len(diagnostics.Items), diagnostics)
+	if len(issues) != 3 {
+		t.Fatalf("field error count = %d, want 3: %v", len(issues), issues)
 	}
 	for index, want := range []struct {
 		column int
 		text   string
 	}{
-		{column: 13, text: "invalid remap destination"},
+		{column: 20, text: "invalid remap destination"},
 		{column: 23, text: `unsupported remap source key "bad"`},
 		{column: 44, text: `unsupported remap source key "nope"`},
 	} {
-		got := diagnostics.Items[index]
-		if got.Line != 2 || got.Column != want.column {
-			t.Errorf("diagnostic[%d] position = %d:%d, want 2:%d", index, got.Line, got.Column, want.column)
+		got := issues[index]
+		if got.Location().Line != 2 || got.Location().Column != want.column {
+			t.Errorf("diagnostic[%d] position = %d:%d, want 2:%d", index, got.Location().Line, got.Location().Column, want.column)
 		}
-		if !strings.Contains(got.Message, want.text) {
-			t.Errorf("diagnostic[%d] message = %q, want %q", index, got.Message, want.text)
+		if !strings.Contains(got.Error(), want.text) {
+			t.Errorf("diagnostic[%d] message = %q, want %q", index, got.Error(), want.text)
 		}
 	}
-	if diagnostics.Items[0].Column != 13 || diagnostics.Items[2].Column != 44 {
-		t.Errorf("errors = %#v, want all positions", diagnostics.Items)
+	if issues[0].Location().Column != 20 || issues[2].Location().Column != 44 {
+		t.Errorf("errors = %#v, want all positions", issues)
 	}
 }
 
@@ -413,27 +382,28 @@ def = ["also-invalid"]
 [other]
 extra = true
 `))
-	diagnostics, ok := errors.AsType[*DiagnosticsError](err)
+	issues, ok := validationIssues(err)
 	if !ok {
-		t.Fatalf("Parse() error type = %T, want *DiagnosticsError", err)
+		t.Fatalf("Parse() error type = %T, want *DiagnosticReport", err)
 	}
-	if len(diagnostics.Items) != 3 {
-		t.Fatalf("len(DiagnosticsError) = %d, want 3: %v", len(diagnostics.Items), diagnostics)
+	if len(issues) != 4 {
+		t.Fatalf("field error count = %d, want 4: %v", len(issues), issues)
 	}
 	for _, want := range []string{
 		`unsupported source layer key "invalid"`,
+		`unsupported layer key "also-invalid"`,
 		`unsupported [other] field "extra"`,
 		`[other].def is required`,
 	} {
 		found := false
-		for _, diagnostic := range diagnostics.Items {
-			if strings.Contains(diagnostic.Message, want) {
+		for _, diagnostic := range issues {
+			if strings.Contains(diagnostic.Error(), want) {
 				found = true
 				break
 			}
 		}
 		if !found {
-			t.Errorf("errors = %#v, want %q", diagnostics.Items, want)
+			t.Errorf("errors = %#v, want %q", issues, want)
 		}
 	}
 }
@@ -458,8 +428,10 @@ b | _ , a
 	if err != nil {
 		t.Fatalf("Parse() error = %v", err)
 	}
-	if got := loaded.Layers["swap"].Definition.Tokens; !reflect.DeepEqual(got, []string{"b", "_", "a"}) {
-		t.Errorf("swap definition tokens = %#v, want [b _ a]", got)
+	definition := loaded.Layers["swap"].Definition
+	assertDestination(t, definition, "a", "b")
+	if len(definition) != 2 {
+		t.Fatalf("definition = %#v, want two bindings", definition)
 	}
 }
 
@@ -477,9 +449,7 @@ def = "#src"
 	if err != nil {
 		t.Fatalf("Parse() error = %v", err)
 	}
-	if got := loaded.Layers["qwerty"].Definition.Tokens; !reflect.DeepEqual(got, []string{"#src"}) {
-		t.Errorf("qwerty definition tokens = %#v, want [#src]", got)
-	}
+	assertDestination(t, loaded.Layers["qwerty"].Definition, "a", "a")
 }
 
 func TestParseStaticDefaultLayerReportsInvalidSourceOnce(t *testing.T) {
@@ -493,19 +463,19 @@ def = ["invalid"]
 [qwerty]
 def = "#src"
 `))
-	diagnostics, ok := errors.AsType[*DiagnosticsError](err)
+	issues, ok := validationIssues(err)
 	if !ok {
-		t.Fatalf("Parse() error type = %T, want *DiagnosticsError", err)
+		t.Fatalf("Parse() error type = %T, want *DiagnosticReport", err)
 	}
-	if len(diagnostics.Items) != 1 {
-		t.Fatalf("len(errors) = %d, want 1: %#v", len(diagnostics.Items), diagnostics.Items)
+	if len(issues) != 1 {
+		t.Fatalf("len(errors) = %d, want 1: %#v", len(issues), issues)
 	}
-	got := diagnostics.Items[0]
-	if got.Message != `unsupported source layer key "invalid" at position 0` {
-		t.Errorf("error message = %q, want source-layer error", got.Message)
+	got := issues[0]
+	if got.Error() != `unsupported source layer key "invalid"` {
+		t.Errorf("error message = %q, want source-layer error", got.Error())
 	}
-	if got.Line != 6 || got.Column != 8 {
-		t.Errorf("error position = %d:%d, want 6:8", got.Line, got.Column)
+	if got.Location().Line != 6 || got.Location().Column != 8 {
+		t.Errorf("error position = %d:%d, want 6:8", got.Location().Line, got.Location().Column)
 	}
 }
 
@@ -526,9 +496,9 @@ def = "{,}|{'}"
 	if err != nil {
 		t.Fatalf("Parse() error = %v", err)
 	}
-	if got := loaded.Layers["symbols"].Definition.Tokens; !reflect.DeepEqual(got, []string{",", "'"}) {
-		t.Errorf("symbols definition tokens = %#v, want escaped key tokens", got)
-	}
+	assertDestination(t, loaded.Layers["symbols"].Definition, "a", ",")
+	assertDestination(t, loaded.Layers["symbols"].Definition, "b", "'")
+	assertDestination(t, loaded.Global, ",", ".")
 }
 
 func TestParseRejectsMalformedBraceEscapes(t *testing.T) {
@@ -566,7 +536,7 @@ func TestParseRejectsInvalidStaticLayer(t *testing.T) {
 		{
 			name: "invalid destination key",
 			data: "[meta]\ndefault = '&layer'\n[src]\ndef = ['a']\n[layer]\ndef = ['invalid']\n",
-			want: `unsupported default layer key "invalid"`,
+			want: `unsupported layer key "invalid"`,
 		},
 	}
 	for _, test := range tests {
@@ -580,14 +550,138 @@ func TestParseRejectsInvalidStaticLayer(t *testing.T) {
 }
 
 func hasErrorMessage(err error, want string) bool {
-	diagnostics, ok := errors.AsType[*DiagnosticsError](err)
+	issues, ok := validationIssues(err)
 	if !ok {
 		return false
 	}
-	for _, diagnostic := range diagnostics.Items {
-		if strings.Contains(diagnostic.Message, want) {
+	for _, diagnostic := range issues {
+		if strings.Contains(diagnostic.Error(), want) {
 			return true
 		}
 	}
 	return false
+}
+
+func key(name string) keys.Key {
+	resolved, _ := keys.Lookup(name)
+	return resolved
+}
+
+func assertDestination(t *testing.T, bindings config.Bindings, from, to string) {
+	t.Helper()
+	if got := bindings[key(from)]; got.Kind != config.RemapKey || got.Destination != key(to) {
+		t.Errorf("binding for %q = %#v, want key %q", from, got, to)
+	}
+}
+
+func assertSequence(t *testing.T, binding config.Binding, names ...string) {
+	t.Helper()
+	want := make([]keys.Key, len(names))
+	for i, name := range names {
+		want[i] = key(name)
+	}
+	if binding.Kind != config.SendKeysAction || !slices.Equal(binding.Keys, want) {
+		t.Errorf("binding = %#v, want send-keys %v", binding, names)
+	}
+}
+
+func TestParseValidatesNonDefaultDefinitions(t *testing.T) {
+	_, err := Parse([]byte(`
+[meta]
+default = "&base"
+[src]
+def = ["a", "b"]
+[base]
+def = "#src"
+[other]
+def = ["invalid"]
+`))
+	for _, want := range []string{"different lengths", "unsupported layer key"} {
+		if !hasErrorMessage(err, want) {
+			t.Errorf("Parse() = %v, want %q", err, want)
+		}
+	}
+}
+
+func TestParseRejectsReservedDefaultAndDuplicateKeys(t *testing.T) {
+	_, err := Parse([]byte(`
+[meta]
+default = "&global"
+[src]
+def = ["a", "A"]
+[global.remaps]
+a = "b"
+A = "c"
+`))
+	for _, want := range []string{"undefined layer", "duplicate source layer key", "duplicate remap source key"} {
+		if !hasErrorMessage(err, want) {
+			t.Errorf("Parse() = %v, want %q", err, want)
+		}
+	}
+}
+
+func TestParseDiagnosticPathsDistinguishQuotedKeys(t *testing.T) {
+	_, err := Parse([]byte(`
+[global.actions]
+"a.b" = { noop = [1] }
+a.b = { noop = [] }
+`))
+	issues, ok := validationIssues(err)
+	if !ok {
+		t.Fatalf("Parse() = %v, want diagnostics", err)
+	}
+	for _, item := range issues {
+		if strings.Contains(item.Error(), "does not accept arguments") {
+			if item.Location().Line != 3 {
+				t.Fatalf("diagnostic = %#v, want line 3", item)
+			}
+			return
+		}
+	}
+	t.Fatal("missing diagnostic for quoted action name")
+}
+
+func TestParseRemapArrayTableOverwritesActions(t *testing.T) {
+	loaded, err := Parse([]byte(`
+[global.actions]
+stop = { noop = [] }
+[[global.remaps]]
+a = "@stop"
+[[global.remaps]]
+A = "c"
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertDestination(t, loaded.Global, "a", "c")
+}
+
+func TestValidationErrorUnwrapReturnsIndependentCopy(t *testing.T) {
+	_, err := Parse([]byte("[global]\nunknown = true\n"))
+	validation, ok := errors.AsType[*ValidationError](err)
+	if !ok {
+		t.Fatalf("Parse() = %v, want validation error", err)
+	}
+	children := validation.Unwrap()
+	children[0] = nil
+	child, ok := errors.AsType[*FieldError](err)
+	if !ok || child.Field() != "global.unknown" || child.Location().Text != "unknown = true" {
+		t.Fatalf("field error = %#v, want global.unknown and its source line", child)
+	}
+}
+
+func validationIssues(err error) ([]*FieldError, bool) {
+	validation, ok := errors.AsType[*ValidationError](err)
+	if !ok {
+		return nil, false
+	}
+	issues := make([]*FieldError, 0)
+	for _, child := range validation.Unwrap() {
+		field, ok := errors.AsType[*FieldError](child)
+		if !ok {
+			return nil, false
+		}
+		issues = append(issues, field)
+	}
+	return issues, true
 }

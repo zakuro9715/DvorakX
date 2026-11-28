@@ -1,0 +1,7 @@
+[global.actions]
+"copy.noop" = {noop = ['a']}
+copy.noop = []
+# Output:
+# [quoted-action-paths.toml:2, 23]: noop action does not accept arguments
+#    2 | "copy.noop" = {noop = ['a']}
+#      |                       ^^^^^

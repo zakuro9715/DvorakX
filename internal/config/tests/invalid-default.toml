@@ -1,0 +1,10 @@
+[meta]
+default = 'base'
+[src]
+def = 'a b'
+[base]
+def = '#src'
+# Output:
+# [invalid-default.toml:2, 12]: [meta].default must be a string layer reference with &
+#    2 | default = 'base'
+#      |            ^^^^

@@ -1,0 +1,10 @@
+[meta]
+default = '&base'
+[src]
+def = 'a b'
+[base]
+def = "a \u007db"
+# Output:
+# [escaped-definition-brace.toml:6, 10]: unexpected }
+#    6 | def = "a \u007db"
+#      |          ^^^^^^

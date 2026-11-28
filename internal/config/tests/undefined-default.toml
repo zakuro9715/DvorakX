@@ -1,0 +1,10 @@
+[meta]
+default = '&missing'
+[src]
+def = 'a b'
+[base]
+def = '#src'
+# Output:
+# [undefined-default.toml:2, 12]: [meta].default references undefined layer "missing"
+#    2 | default = '&missing'
+#      |            ^^^^^^^^

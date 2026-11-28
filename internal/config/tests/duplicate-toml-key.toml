@@ -1,0 +1,7 @@
+[global.remaps]
+a = 'b'
+a = 'c'
+# Output:
+# [duplicate-toml-key.toml:3, 1]: key a is already defined
+#    3 | a = 'c'
+#      | ^

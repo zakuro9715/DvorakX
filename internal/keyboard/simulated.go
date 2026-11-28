@@ -87,10 +87,12 @@ func (k *SimulatedKeyboard) mapping(event Event) (Mapping, bool) {
 
 // Resolve returns the effective mapping for a new key press.
 func (m *Mappings) Resolve(key keys.Key) (Mapping, bool) {
-	if stages, ok := m.lookupStages(); ok {
-		return resolveStages(key, stages)
+	snapshot, _ := m.value.Load().(mappingSnapshot)
+	if snapshot.stages != nil {
+		return resolveStages(key, snapshot.stages)
 	}
-	return m.lookup(key)
+	mapping, ok := snapshot.direct[key]
+	return mapping, ok
 }
 
 func resolveStages(key keys.Key, stages []MappingStage) (Mapping, bool) {
