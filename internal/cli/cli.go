@@ -12,6 +12,7 @@ import (
 	urfavecli "github.com/urfave/cli/v3"
 
 	"github.com/zakuro9715/DvorakZ/internal/config"
+	"github.com/zakuro9715/DvorakZ/internal/config/parser"
 	"github.com/zakuro9715/DvorakZ/internal/keyboard"
 )
 
@@ -140,8 +141,8 @@ func watchConfig(path, displayPath string, mappings *keyboard.Mappings, stop <-c
 }
 
 func loadConfig(path, displayPath string) (config.Config, error) {
-	loaded, err := config.LoadFile(path)
-	if diagnostics, ok := errors.AsType[*config.DiagnosticsError](err); ok && displayPath != "" {
+	loaded, err := parser.LoadFile(path)
+	if diagnostics, ok := errors.AsType[*parser.DiagnosticsError](err); ok && displayPath != "" {
 		for index := range diagnostics.Items {
 			diagnostics.Items[index].Path = displayPath
 		}
@@ -152,9 +153,9 @@ func loadConfig(path, displayPath string) (config.Config, error) {
 //nolint:unparam
 func formatConfigError(operation, path string, err error, colors ...bool) string {
 	color := len(colors) > 0 && colors[0]
-	formatter := config.PrettyFormatter{Color: color}
+	formatter := parser.PrettyFormatter{Color: color}
 	var output strings.Builder
-	if diagnostics, ok := errors.AsType[*config.DiagnosticsError](err); ok {
+	if diagnostics, ok := errors.AsType[*parser.DiagnosticsError](err); ok {
 		fmt.Fprintf(&output, "dvorakz: %s config %q:\n", operation, path)
 		_ = formatter.FormatTo(&output, diagnostics.Items)
 		return output.String()

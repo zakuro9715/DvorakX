@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/zakuro9715/DvorakZ/internal/config"
+	"github.com/zakuro9715/DvorakZ/internal/config/parser"
 	"github.com/zakuro9715/DvorakZ/internal/keyboard"
 	"github.com/zakuro9715/DvorakZ/internal/keys"
 	"github.com/zakuro9715/DvorakZ/testing/diff"
@@ -64,7 +65,7 @@ func Config(t testingT, text string) *Environment {
 // Config configures the environment from TOML text.
 func (environment *Environment) Config(text string) *Environment {
 	environment.t.Helper()
-	loaded, err := config.Parse([]byte(text))
+	loaded, err := parser.Parse([]byte(text))
 	if err != nil {
 		environment.t.Fatalf("parse test configuration: %v", err)
 	}
@@ -92,7 +93,7 @@ func (environment *Environment) loadConfig(path string, callerSkip int) *Environ
 		path = filepath.Join(filepath.Dir(file), path)
 	}
 	path = filepath.ToSlash(path)
-	loaded, err := config.LoadFile(path)
+	loaded, err := parser.LoadFile(path)
 	if err != nil {
 		environment.t.Fatalf("load test configuration %q: %v", path, err)
 	}
