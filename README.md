@@ -29,6 +29,7 @@ events:
 
 - go tool lefthook install
 - [golangci-lint](https://golangci-lint.run/docs/welcome/install/local/)
+- lcov (optional)
 
 ```
 make prepare

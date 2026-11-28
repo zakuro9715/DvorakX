@@ -23,3 +23,10 @@ a      # same as `key:down key:up`
 
 a b c  # events are separated by space
 ```
+
+## HTML Coverage
+
+```
+make test.cov
+make open-cov
+```
