@@ -30,3 +30,7 @@ a b c  # events are separated by space
 make test.cov
 make open-cov
 ```
+
+## E2E Test
+
+go test -tags=e2e ./e2e/...
