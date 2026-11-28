@@ -17,7 +17,7 @@ jobs:
   test:
     strategy:
       matrix:
-        os: [ubuntu-latest, windows-latest]
+        os: [ubuntu-latest, windows-latest, macos-latest]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v7
@@ -40,6 +40,8 @@ jobs:
           } | sudo tee /run/udev/rules.d/99-dvorakz-e2e.rules
           sudo udevadm control --reload-rules
       - name: Test
+        env:
+          CGO_ENABLED: ${{ runner.os == 'macOS' && '1' || '0' }}
         run: go test ./... -tags=e2e -coverprofile=coverage.out -covermode=atomic
       - name: Upload coverage
         uses: codecov/codecov-action@v7
