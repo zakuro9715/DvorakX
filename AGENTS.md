@@ -30,6 +30,11 @@ run `golintci-lint run` to check code style.
 
 - When testing keyboard behavior, write comments that explain what the test is doing.
 
+#### Coverage
+
+- Aim for at least 80% overall Go statement coverage, measured on Linux with `make test.cov`.
+- Aim for at least 90% Go statement coverage on added or modified code in each pull requesat.
+
 ### Comments
 
 - Do not write unnecessary comments.
