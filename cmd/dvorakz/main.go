@@ -8,7 +8,7 @@ import (
 	"strings"
 
 	"github.com/zakuro9715/DvorakZ/internal/cli"
-	"github.com/zakuro9715/DvorakZ/internal/config"
+	"github.com/zakuro9715/DvorakZ/internal/config/parser"
 )
 
 func main() {
@@ -23,9 +23,9 @@ func exitf(format string, args ...any) {
 }
 
 func formatError(err error) string {
-	formatter := config.PrettyFormatter{Color: colorOutput(os.Stderr)}
+	formatter := parser.PrettyFormatter{Color: colorOutput(os.Stderr)}
 	var output strings.Builder
-	if diagnosticList, ok := errors.AsType[*config.DiagnosticsError](err); ok {
+	if diagnosticList, ok := errors.AsType[*parser.DiagnosticsError](err); ok {
 		_ = formatter.FormatTo(&output, diagnosticList.Items)
 		return output.String()
 	}

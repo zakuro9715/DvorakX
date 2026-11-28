@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/zakuro9715/DvorakZ/internal/config"
+	"github.com/zakuro9715/DvorakZ/internal/config/parser"
 	"github.com/zakuro9715/DvorakZ/internal/keyboard"
 )
 
@@ -55,7 +55,7 @@ func TestRunReturnsAllConfigurationDiagnostics(t *testing.T) {
 	if err == nil {
 		t.Fatal("Run() error = nil, want configuration diagnostics")
 	}
-	diagnostics, ok := errors.AsType[*config.DiagnosticsError](err)
+	diagnostics, ok := errors.AsType[*parser.DiagnosticsError](err)
 	if !ok {
 		t.Fatalf("Run() error type = %T, want *errors.DiagnosticsError", err)
 	}
@@ -83,7 +83,7 @@ func TestLoadConfigUsesSeparateDisplayPath(t *testing.T) {
 	}
 
 	_, err := loadConfig(configPath, "config.toml")
-	diagnostics, ok := errors.AsType[*config.DiagnosticsError](err)
+	diagnostics, ok := errors.AsType[*parser.DiagnosticsError](err)
 	if !ok || len(diagnostics.Items) != 1 {
 		t.Fatalf("loadConfig() error = %v, want one diagnostic", err)
 	}
@@ -109,7 +109,7 @@ func TestFormatConfigErrorRendersDiagnostics(t *testing.T) {
 	if err := os.WriteFile(configPath, []byte("[global]\nunknown = true\n"), 0o600); err != nil {
 		t.Fatalf("write configuration: %v", err)
 	}
-	_, err := config.LoadFile(configPath)
+	_, err := parser.LoadFile(configPath)
 	if err == nil {
 		t.Fatal("Parse() error = nil, want diagnostic")
 	}
