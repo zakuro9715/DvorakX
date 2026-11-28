@@ -33,4 +33,14 @@ make open-cov
 
 ## E2E Test
 
+```sh
 go test -tags=e2e ./e2e/...
+```
+
+### Linux
+
+Run in an isolated Linux VM (amd64 or arm64) with udev running and uinput
+available. Load the module with `sudo modprobe uinput` if needed. The test user
+needs write access to `/dev/uinput` (or `/dev/input/uinput`) and read access to
+the evdev nodes for `DvorakZ E2E source` and `DvorakZ virtual keyboard`.
+DvorakZ can grab other keyboards it has permission to read during the test.
