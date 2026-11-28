@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/signal"
 	"strings"
+	"syscall"
 	"time"
 
 	urfavecli "github.com/urfave/cli/v3"
@@ -68,7 +69,7 @@ func run(ctx context.Context, configPath string, debug bool, runner Runner) erro
 
 	stop := make(chan struct{})
 	signals := make(chan os.Signal, 1)
-	signal.Notify(signals, os.Interrupt)
+	signal.Notify(signals, os.Interrupt, syscall.SIGTERM)
 	defer signal.Stop(signals)
 	runContext, cancel := context.WithCancel(ctx)
 	defer cancel()

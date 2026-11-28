@@ -77,15 +77,20 @@ func (k *SimulatedKeyboard) mapping(event Event) (Mapping, bool) {
 		return mapping, true
 	}
 
-	mapping, ok := k.mappings.lookup(event.Key)
-	if stages, stagesOK := k.mappings.lookupStages(); stagesOK {
-		mapping, ok = resolveStages(event.Key, stages)
-	}
+	mapping, ok := k.mappings.Resolve(event.Key)
 	if !ok {
 		return Mapping{}, false
 	}
 	k.pressed[event.Key] = mapping
 	return mapping, true
+}
+
+// Resolve returns the effective mapping for a new key press.
+func (m *Mappings) Resolve(key keys.Key) (Mapping, bool) {
+	if stages, ok := m.lookupStages(); ok {
+		return resolveStages(key, stages)
+	}
+	return m.lookup(key)
 }
 
 func resolveStages(key keys.Key, stages []MappingStage) (Mapping, bool) {
@@ -112,24 +117,29 @@ func resolveStages(key keys.Key, stages []MappingStage) (Mapping, bool) {
 }
 
 func (k *SimulatedKeyboard) sendKeys(sendKeys []keys.Key) error {
+	return SendSequence(k.output, sendKeys)
+}
+
+// SendSequence emits a configured sequence through output.
+func SendSequence(output Output, sendKeys []keys.Key) error {
 	held := make([]keys.Key, 0, len(sendKeys))
 	for _, key := range sendKeys {
 		if isModifier(key) {
-			if err := k.output.Send(Event{Key: key}); err != nil {
+			if err := output.Send(Event{Key: key}); err != nil {
 				return err
 			}
 			held = append(held, key)
 			continue
 		}
-		if err := k.output.Send(Event{Key: key}); err != nil {
+		if err := output.Send(Event{Key: key}); err != nil {
 			return err
 		}
-		if err := k.output.Send(Event{Key: key, KeyUp: true}); err != nil {
+		if err := output.Send(Event{Key: key, KeyUp: true}); err != nil {
 			return err
 		}
 	}
 	for _, key := range slices.Backward(held) {
-		if err := k.output.Send(Event{Key: key, KeyUp: true}); err != nil {
+		if err := output.Send(Event{Key: key, KeyUp: true}); err != nil {
 			return err
 		}
 	}
