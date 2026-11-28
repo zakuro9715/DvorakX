@@ -1,78 +1,36 @@
 package config
 
-import (
-	"errors"
-	"fmt"
-	"path/filepath"
-	"strings"
+import "github.com/zakuro9715/DvorakZ/internal/keys"
 
-	"github.com/zakuro9715/DvorakZ/internal/keys"
-)
-
-// Config contains the validated configuration file structure.
+// Config contains the resolved bindings for every configured layer.
 type Config struct {
-	Meta   MetaConfig
-	Global LayerConfig
-	Source LayerConfig
-	Layers map[string]LayerConfig
+	DefaultLayer string
+	Global       Bindings
+	Layers       map[string]Layer
 }
 
-// MetaConfig contains settings from the [meta] table.
-type MetaConfig struct {
-	Default string
+// Layer contains the definition and remap stages for a named layer.
+type Layer struct {
+	Definition Bindings
+	Remaps     Bindings
 }
 
-// LayerConfig contains a layer definition, actions, and direct remaps.
-type LayerConfig struct {
-	Definition Definition
-	Actions    map[string]ActionSpec
-	Remaps     []map[string]string
-}
+// Bindings associates input keys with their transformations in one stage.
+type Bindings map[keys.Key]Binding
 
-// Definition preserves the source form of a layer definition.
-type Definition struct {
-	Text   string
-	Keys   []string
-	Tokens []string
-}
-
-// Action identifies a configured action.
-type Action uint8
+// BindingKind identifies the payload of a binding.
+type BindingKind uint8
 
 const (
-	_ Action = iota
+	_ BindingKind = iota
+	RemapKey
 	NoopAction
 	SendKeysAction
 )
 
-// ActionSpec contains an action and its resolved key arguments.
-type ActionSpec struct {
-	Kind Action
-	Keys []keys.Key
-}
-
-// ResolveConfigPath returns the explicit path, or config.toml next to the executable.
-func ResolveConfigPath(explicitPath, executablePath string) (string, error) {
-	if explicitPath != "" {
-		return filepath.Clean(explicitPath), nil
-	}
-	if executablePath == "" {
-		return "", errors.New("resolve default config path: executable path is empty")
-	}
-	return filepath.Join(filepath.Dir(executablePath), "config.toml"), nil
-}
-
-// UnescapeKeyName removes the explicit braces used for punctuation key names.
-func UnescapeKeyName(name string) (string, error) {
-	if !strings.ContainsAny(name, "{}") {
-		return name, nil
-	}
-	if len(name) < 3 || name[0] != '{' || name[len(name)-1] != '}' {
-		return "", fmt.Errorf("%q must be enclosed by one pair of braces", name)
-	}
-	unescaped := name[1 : len(name)-1]
-	if unescaped == "" || strings.ContainsAny(unescaped, "{}") {
-		return "", fmt.Errorf("%q contains invalid braces", name)
-	}
-	return unescaped, nil
+// Binding describes a key transformation. Kind selects the applicable payload.
+type Binding struct {
+	Kind        BindingKind
+	Destination keys.Key
+	Keys        []keys.Key
 }

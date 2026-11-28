@@ -20,7 +20,10 @@ copy-paste2 = { send-keys = "ctrl c v" }
 def = ["a", "b", "c", "d"]
 
 [base]
-def = ["b", "@disable-key", "c", "d"]
+def = """
+# Separate tokens with whitespace, pipes, or commas.
+b | @disable-key, _ d
+"""
 
 [base.actions]
 disable-key = { noop = [] }
@@ -32,3 +35,12 @@ met = "alt"
 # A string definition may refer to the source definition directly.
 [alternate]
 def = "#src"
+
+[symbols]
+def = ["{,}", ".", "_", "/"]
+
+[[symbols.remaps]]
+x = "y"
+
+[[symbols.remaps]]
+x = "z"
