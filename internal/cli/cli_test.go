@@ -23,7 +23,7 @@ func TestRunPassesConfigurationAndDebugFlagToRunner(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	err := Run(ctx, []string{"dvorakz", "--config", configPath, "--debug"}, func(mappings *keyboard.Mappings, stop <-chan struct{}, debug bool) error {
+	err := Run(ctx, []string{"dvorakz", "--config", configPath, "--debug"}, func(mappings *keyboard.Mappings, stop <-chan struct{}, _ func() *keyboard.InputObserver, debug bool) error {
 		if !debug {
 			t.Error("debug = false, want true")
 		}

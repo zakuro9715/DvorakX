@@ -20,7 +20,7 @@ import (
 )
 
 // Runner starts the platform-specific remapping backend.
-type Runner func(mappings *keyboard.Mappings, stop <-chan struct{}, debug bool) error
+type Runner func(mappings *keyboard.Mappings, stop <-chan struct{}, newObserver func() *keyboard.InputObserver, debug bool) error
 
 // Run parses command-line arguments and runs the remapper.
 func Run(ctx context.Context, args []string, runner Runner) error {
@@ -66,25 +66,18 @@ func run(ctx context.Context, configPath string, debug bool, runner Runner) erro
 		fmt.Fprintf(os.Stderr, "dvorakz: debug: loaded config from %s\n", configPath)
 	}
 
-	stop := make(chan struct{})
-	signals := make(chan os.Signal, 1)
-	signal.Notify(signals, os.Interrupt, syscall.SIGTERM)
-	defer signal.Stop(signals)
-	runContext, cancel := context.WithCancel(ctx)
+	signalContext, stopSignals := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
+	defer stopSignals()
+	runContext, cancel := context.WithCancel(signalContext)
 	defer cancel()
-	go func() {
-		select {
-		case <-runContext.Done():
-		case <-signals:
-		}
-		close(stop)
-	}()
+	stop := runContext.Done()
+	newObserver := func() *keyboard.InputObserver { return keyboard.NewInputObserver(cancel) }
 
 	go watchConfig(configPath, displayPath, mappings, stop, debug)
 
 	//nolint:forbidigo
-	fmt.Printf("DvorakZ remapping configured keys; press Ctrl+C to stop.\n")
-	return runner(mappings, stop, debug)
+	fmt.Printf("DvorakZ remapping configured keys; hold Esc for 3 seconds to stop.\n")
+	return runner(mappings, stop, newObserver, debug)
 }
 
 type configFileState struct {

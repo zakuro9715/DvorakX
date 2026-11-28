@@ -78,7 +78,7 @@ const (
 )
 
 func TestRun(t *testing.T) {
-	for _, scenario := range []string{"install failure", "read failure", "quit without stop channel", "preclosed stop with events"} {
+	for _, scenario := range []string{"install failure", "read failure", "quit without stop channel", "preclosed stop with events", "escape hold"} {
 		t.Run(scenario, func(t *testing.T) { testRunScenario(t, scenario) })
 	}
 }
@@ -134,9 +134,27 @@ func testRunScenario(t *testing.T, scenario string) {
 
 	arrow := keys.Key{ScanCode: keys.ArrowRight, Extended: true}
 	mappings := keyboard.NewMappings(map[keys.Key]keys.Key{
-		arrow: {ScanCode: keys.B}, {ScanCode: keys.C}: {ScanCode: keys.D},
+		{ScanCode: keys.Escape}: {ScanCode: keys.A},
+		arrow:                   {ScanCode: keys.B}, {ScanCode: keys.C}: {ScanCode: keys.D},
 	})
 	events := stubHookEvents(t)
+	if scenario == "escape hold" {
+		stubProcedure(t, &procSendInput, func(_ uintptr, input *input, _ uintptr) uintptr {
+			events.sends++
+			wantFlags := uint32(keyeventfScancode)
+			if events.sends == 2 {
+				wantFlags |= keyeventfKeyUp
+				if uninstalls != 1 {
+					t.Error("released the mapped key before removing the hook")
+				}
+			}
+			if input.Ki.ScanCode != keys.A || input.Ki.Flags != wantFlags {
+				t.Errorf("unexpected Esc replacement: %+v", input.Ki)
+			}
+			return 1
+		})
+	}
+
 	stubProcedure(t, &procGetMessageW, func(_ *message, _, _, _ uintptr) uintptr {
 		reads++
 		if scenario == "read failure" {
@@ -146,23 +164,38 @@ func testRunScenario(t *testing.T, scenario string) {
 			driveHookEvents(t, callback, events)
 			return 1
 		}
-		if scenario == "preclosed stop with events" {
+		if scenario == "escape hold" {
+			// Hold physical Esc without a key-up and wait for the emergency quit message.
+			event := keyboardHook{ScanCode: keys.Escape}
+			got, _, _ := syscall.SyscallN(callback, 0, wmKeyDown, uintptr(unsafe.Pointer(&event)))
+			if got != 1 {
+				t.Error("the physical Esc key press did not remap")
+			}
+		}
+		if scenario == "preclosed stop with events" || scenario == "escape hold" {
 			select {
 			case <-quit:
-			case <-time.After(3 * time.Second):
+			case <-time.After(5 * time.Second):
 				t.Error("timed out waiting for WM_QUIT")
 			}
 		}
 		return 0
 	})
 
-	err := Run(mappings, stop, debug)
+	newObserver := func() *keyboard.InputObserver {
+		return keyboard.NewInputObserver(func() { close(stop) })
+	}
+	err := Run(mappings, stop, newObserver, debug)
 	wantReads, wantUninstalls, wantError := 1, 1, ""
 	switch scenario {
 	case "install failure":
 		wantReads, wantUninstalls, wantError = 0, 0, "install low-level keyboard hook"
 	case "read failure":
 		wantError = "read Windows message"
+	case "escape hold":
+		if events.sends != 2 {
+			t.Errorf("got %d keyboard outputs, want mapped press and cleanup release", events.sends)
+		}
 	case "preclosed stop with events":
 		wantReads = 2
 		checkHookEvents(t, events, log.String())

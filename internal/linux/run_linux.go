@@ -21,10 +21,11 @@ type device struct {
 	name             string
 	grabbed, dropped bool
 	remap            *remapper
+	observer         *keyboard.InputObserver
 }
 
 // Run manages Linux keyboards until stop is closed.
-func Run(mappings *keyboard.Mappings, stop <-chan struct{}, debug io.Writer) error {
+func Run(mappings *keyboard.Mappings, stop <-chan struct{}, newObserver func() *keyboard.InputObserver, debug io.Writer) error {
 	probe, err := openUinput()
 	if err != nil {
 		return fmt.Errorf("open uinput (check device and write permission): %w", err)
@@ -46,7 +47,7 @@ func Run(mappings *keyboard.Mappings, stop <-chan struct{}, debug io.Writer) err
 		}
 		now := time.Now()
 		if !now.Before(nextScan) {
-			reconcile(devices, failures, mappings, debug)
+			reconcile(devices, failures, mappings, debug, newObserver)
 			nextScan = now.Add(time.Second)
 		}
 		if err := pollDevices(devices, failures); err != nil {
@@ -55,7 +56,7 @@ func Run(mappings *keyboard.Mappings, stop <-chan struct{}, debug io.Writer) err
 	}
 }
 
-func reconcile(devices map[string]*device, failures map[string]string, mappings *keyboard.Mappings, debug io.Writer) {
+func reconcile(devices map[string]*device, failures map[string]string, mappings *keyboard.Mappings, debug io.Writer, newObserver func() *keyboard.InputObserver) {
 	paths, err := filepath.Glob("/dev/input/event*")
 	if err != nil {
 		reportFailure(failures, "/dev/input", err)
@@ -75,6 +76,7 @@ func reconcile(devices map[string]*device, failures map[string]string, mappings 
 				delete(failures, path)
 				continue
 			}
+			d.observer = newObserver()
 			devices[path] = d
 		}
 		if d.grabbed || !virtualReady(d.name) {
@@ -230,6 +232,7 @@ func (d *device) read() error {
 func (d *device) process(kind, code uint16, value int32) error {
 	switch {
 	case kind == evSyn && code == synDropped:
+		d.observer.Reset()
 		d.dropped = true
 	case d.dropped && kind == evSyn && code == synReport:
 		state, err := pressedKeys(d.input)
@@ -239,12 +242,16 @@ func (d *device) process(kind, code uint16, value int32) error {
 		d.dropped = false
 		return d.remap.sync(state)
 	case !d.dropped && kind == evKey:
+		if key, ok := codeToKey[code]; ok && value >= 0 && value <= 2 {
+			d.observer.Observe(keyboard.Event{Key: key, KeyUp: value == 0}, value == 2)
+		}
 		return d.remap.handle(code, value, false)
 	}
 	return nil
 }
 
 func (d *device) close() {
+	d.observer.Reset()
 	for code := range d.remap.held {
 		_ = writeKey(d.output, code, 0)
 	}

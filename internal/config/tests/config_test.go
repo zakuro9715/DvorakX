@@ -29,7 +29,7 @@ func TestConfigErrors(t *testing.T) {
 			}
 			t.Chdir(dir)
 
-			err := cli.Run(context.Background(), []string{"dvorakz", "--config", path}, func(*keyboard.Mappings, <-chan struct{}, bool) error {
+			err := cli.Run(context.Background(), []string{"dvorakz", "--config", path}, func(*keyboard.Mappings, <-chan struct{}, func() *keyboard.InputObserver, bool) error {
 				t.Fatal("runner called for invalid configuration")
 				return nil
 			})

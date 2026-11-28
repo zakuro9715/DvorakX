@@ -25,6 +25,10 @@ events:
 .\dvorakz.exe --debug
 ```
 
+### Force Quit
+
+Press physical Esc key 3 seconds to force quit.
+
 ## Development
 
 - go tool lefthook install

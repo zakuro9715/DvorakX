@@ -8,6 +8,6 @@ import (
 	"github.com/zakuro9715/DvorakZ/internal/keyboard"
 )
 
-func run(_ *keyboard.Mappings, _ <-chan struct{}, _ bool) error {
+func run(_ *keyboard.Mappings, _ <-chan struct{}, _ func() *keyboard.InputObserver, _ bool) error {
 	return errors.New("macOS support requires a build with CGO_ENABLED=1 and the macOS SDK")
 }

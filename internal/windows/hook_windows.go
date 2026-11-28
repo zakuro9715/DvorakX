@@ -22,6 +22,7 @@ const (
 	keyeventfScancode    = 0x0008
 	keyeventfExtendedKey = 0x0001
 	keyeventfKeyUp       = 0x0002
+	llkhfInjected        = 0x10
 	injectionMarker      = 0x44564B52
 )
 
@@ -71,7 +72,7 @@ type point struct {
 	Y int32
 }
 
-type output struct{}
+type output struct{ held map[keys.Key]struct{} }
 
 func (o output) Send(event keyboard.Event) error {
 	flags := uint32(0)
@@ -97,17 +98,25 @@ func (o output) Send(event keyboard.Event) error {
 	if sent == 0 {
 		return err
 	}
+	if event.KeyUp {
+		delete(o.held, event.Key)
+	} else if o.held != nil {
+		o.held[event.Key] = struct{}{}
+	}
 	return nil
 }
 
 // Run intercepts and remaps key events until stop is closed.
-func Run(mappings *keyboard.Mappings, stop <-chan struct{}, debugOutput io.Writer) error {
+func Run(mappings *keyboard.Mappings, stop <-chan struct{}, newObserver func() *keyboard.InputObserver, debugOutput io.Writer) error {
 	runtime.LockOSThread()
 	defer runtime.UnlockOSThread()
 
 	threadID, _, _ := syscall.SyscallN(procGetCurrentThreadID.Addr())
 	debugf(debugOutput, "keyboard hook starting on thread %d", threadID)
-	simulated := keyboard.NewSimulatedKeyboard(mappings, output{})
+	observer := newObserver()
+	defer observer.Reset()
+	out := output{held: make(map[keys.Key]struct{})}
+	simulated := keyboard.NewSimulatedKeyboard(mappings, out)
 	callback := func(rawCode uintptr, wParam uintptr, event *keyboardHook) uintptr {
 		code := int(int32(rawCode))
 		if code < 0 {
@@ -123,14 +132,18 @@ func Run(mappings *keyboard.Mappings, stop <-chan struct{}, debugOutput io.Write
 		if keyUp {
 			eventType = "up"
 		}
-		handled, err := simulated.Handle(keyboard.Event{
+		inputEvent := keyboard.Event{
 			Key: keys.New(
 				uint16(event.VirtualKey),
 				uint16(event.ScanCode),
 				event.Flags&keyeventfExtendedKey != 0,
 			),
 			KeyUp: keyUp,
-		})
+		}
+		if event.Flags&llkhfInjected == 0 {
+			observer.Observe(inputEvent, false)
+		}
+		handled, err := simulated.Handle(inputEvent)
 		if err != nil {
 			debugf(debugOutput, "SendInput failed for sc=0x%02X: %v", event.ScanCode, err)
 		}
@@ -142,10 +155,8 @@ func Run(mappings *keyboard.Mappings, stop <-chan struct{}, debugOutput io.Write
 	}
 
 	var msg message
-	if stop != nil {
-		// Ensure WM_QUIT can be posted even when stop is already closed.
-		_, _, _ = syscall.SyscallN(procPeekMessageW.Addr(), uintptr(unsafe.Pointer(&msg)), 0, 0, 0, 0)
-	}
+	// Ensure WM_QUIT can be posted even when stop is already closed.
+	_, _, _ = syscall.SyscallN(procPeekMessageW.Addr(), uintptr(unsafe.Pointer(&msg)), 0, 0, 0, 0)
 	hook, _, err := syscall.SyscallN(procSetWindowsHookExW.Addr(), whKeyboardLL, syscall.NewCallback(callback), 0, 0)
 	if hook == 0 {
 		return fmt.Errorf("install low-level keyboard hook: %w", err)
@@ -153,25 +164,29 @@ func Run(mappings *keyboard.Mappings, stop <-chan struct{}, debugOutput io.Write
 	debugf(debugOutput, "keyboard hook installed")
 	defer func() {
 		_, _, _ = syscall.SyscallN(procUnhookWindowsHookEx.Addr(), hook)
+		for key := range out.held {
+			if err := out.Send(keyboard.Event{Key: key, KeyUp: true}); err != nil {
+				debugf(debugOutput, "release %s: %v", keys.Name(key), err)
+			}
+		}
 		debugf(debugOutput, "keyboard hook stopped")
 	}()
 
-	if stop != nil {
-		done := make(chan struct{})
-		joined := make(chan struct{})
-		go func() {
-			defer close(joined)
-			select {
-			case <-stop:
-				_, _, _ = syscall.SyscallN(procPostThreadMessageW.Addr(), threadID, wmQuit, 0, 0)
-			case <-done:
-			}
-		}()
-		defer func() {
-			close(done)
-			<-joined
-		}()
-	}
+	done := make(chan struct{})
+	joined := make(chan struct{})
+	go func() {
+		defer close(joined)
+		select {
+		case <-stop:
+		case <-done:
+			return
+		}
+		_, _, _ = syscall.SyscallN(procPostThreadMessageW.Addr(), threadID, wmQuit, 0, 0)
+	}()
+	defer func() {
+		close(done)
+		<-joined
+	}()
 
 	for {
 		result, _, err := syscall.SyscallN(procGetMessageW.Addr(), uintptr(unsafe.Pointer(&msg)), 0, 0, 0)

@@ -19,12 +19,14 @@ import (
 	"unsafe"
 
 	"github.com/zakuro9715/DvorakZ/internal/keyboard"
+	"github.com/zakuro9715/DvorakZ/internal/keys"
 )
 
 const capsCode = 57 // Caps Lock
 
 type session struct {
 	*remapper
+	observer     *keyboard.InputObserver
 	proxy        C.CGEventTapProxy
 	flags        uint64
 	caps         bool
@@ -34,11 +36,12 @@ type session struct {
 }
 
 // Run remaps keyboard events in the active macOS session until stop is closed.
-func Run(mappings *keyboard.Mappings, stop <-chan struct{}, debug io.Writer) error {
+func Run(mappings *keyboard.Mappings, stop <-chan struct{}, newObserver func() *keyboard.InputObserver, debug io.Writer) error {
 	runtime.LockOSThread()
 	defer runtime.UnlockOSThread()
 
-	s := &session{}
+	s := &session{observer: newObserver()}
+	defer s.observer.Reset()
 	s.remapper = newRemapper(mappings, func(code int, up, repeat bool) {
 		if code == capsCode && !up && !repeat {
 			s.caps = !s.caps
@@ -106,6 +109,7 @@ func dvorakEvent(handle C.uintptr_t, proxy C.CGEventTapProxy, rawCode, up, repea
 	s.proxy, s.flags = proxy, uint64(*flags)
 	code := int(rawCode)
 	keyUp := up != 0
+
 	if changed != 0 {
 		if code == capsCode {
 			s.suppressCaps = s.resolve(code).mapped
@@ -123,6 +127,9 @@ func dvorakEvent(handle C.uintptr_t, proxy C.CGEventTapProxy, rawCode, up, repea
 			return 0
 		}
 		keyUp = s.flags&side == 0
+	}
+	if key, ok := keys.Lookup(names[code]); ok {
+		s.observer.Observe(keyboard.Event{Key: key, KeyUp: keyUp}, repeat != 0)
 	}
 	handled := s.handle(code, keyUp, repeat != 0)
 	*flags = C.uint64_t(s.outputFlags(s.flags, s.suppressCaps, s.caps))
