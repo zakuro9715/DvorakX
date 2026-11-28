@@ -1,0 +1,19 @@
+[meta]
+default = '&base'
+[src]
+def = 'a b'
+[base]
+def = '#src'
+[other]
+def = '#src'
+remaps = false
+[another]
+def = '#src'
+remaps = [true, {a = 'b'}]
+# Output:
+# [invalid-remap-shapes.toml:9, 10]: [other].remaps must be a TOML table or table array
+#    9 | remaps = false
+#      |          ^^^^^
+# [invalid-remap-shapes.toml:12, 11]: another.remaps[0] must be a TOML table
+#   12 | remaps = [true, {a = 'b'}]
+#      |           ^^^^

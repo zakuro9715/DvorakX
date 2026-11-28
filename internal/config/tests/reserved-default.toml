@@ -1,0 +1,10 @@
+[meta]
+default = '&src'
+[src]
+def = 'a b'
+[base]
+def = '#src'
+# Output:
+# [reserved-default.toml:2, 12]: [meta].default references undefined layer "src"
+#    2 | default = '&src'
+#      |            ^^^^

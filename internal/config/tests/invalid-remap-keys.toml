@@ -1,0 +1,23 @@
+[global.remaps]
+a = 'b'
+A = 'c'
+b = 'unknown'
+c = '@missing'
+'{d' = 'e'
+e = '{f'
+# Output:
+# [invalid-remap-keys.toml:2, 1]: duplicate remap source key "a"
+#    2 | a = 'b'
+#      | ^
+# [invalid-remap-keys.toml:4, 6]: unsupported remap destination key "unknown"
+#    4 | b = 'unknown'
+#      |      ^^^^^^^
+# [invalid-remap-keys.toml:5, 6]: undefined action "missing"
+#    5 | c = '@missing'
+#      |      ^^^^^^^^
+# [invalid-remap-keys.toml:6, 1]: "{d" must be enclosed by one pair of braces
+#    6 | '{d' = 'e'
+#      | ^^^^
+# [invalid-remap-keys.toml:7, 6]: "{f" must be enclosed by one pair of braces
+#    7 | e = '{f'
+#      |      ^^

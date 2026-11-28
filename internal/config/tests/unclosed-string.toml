@@ -1,0 +1,6 @@
+[global]
+remaps = 'unterminated
+# Output:
+# [unclosed-string.toml:2, 23]: literal strings cannot have new lines
+#    2 | remaps = 'unterminated
+#      |                       ^

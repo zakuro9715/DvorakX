@@ -1,0 +1,15 @@
+[base]
+unknown = true
+# Output:
+# [missing-required-settings.toml:1, 1]: layer configuration requires [src]
+#    1 | [base]
+#      | ^
+# [missing-required-settings.toml:1, 1]: layer configuration requires [meta]
+#    1 | [base]
+#      | ^
+# [missing-required-settings.toml:1, 2]: [base].def is required
+#    1 | [base]
+#      |  ^^^^
+# [missing-required-settings.toml:2, 1]: unsupported [base] field "unknown"
+#    2 | unknown = true
+#      | ^^^^^^^

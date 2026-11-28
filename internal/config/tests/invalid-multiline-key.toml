@@ -1,0 +1,15 @@
+[meta]
+default = '&base'
+[src]
+def = 'a b'
+[base]
+def = """
+  # skipped tokens
+  a \
+    \u0069nvalid-key
+"""
+
+# Output:
+# [invalid-multiline-key.toml:9, 5]: unsupported layer key "invalid-key"
+#    9 |     \u0069nvalid-key
+#      |     ^^^^^^^^^^^^^^^^

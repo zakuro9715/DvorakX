@@ -1,0 +1,11 @@
+[meta]
+default = '&base'
+[src]
+def = ['a', 'b']
+[base]
+def = ['a'] # comment
+
+# Output:
+# [array-length-mismatch.toml:6, 7]: source and layer definitions have different lengths: 2 and 1
+#    6 | def = ['a'] # comment
+#      |       ^^^^^

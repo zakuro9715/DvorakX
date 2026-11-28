@@ -1,0 +1,10 @@
+[[global.remaps]]
+a = 'b'
+[[global.remaps]]
+[global.remaps.b]
+value = 'a'
+
+# Output:
+# [invalid-remap-array-subtable.toml:4, 16]: invalid remap destination: expected string, got table
+#    4 | [global.remaps.b]
+#      |                ^

@@ -1,0 +1,17 @@
+global = 1
+meta = false
+src = []
+base = "invalid"
+# Output:
+# [non-table-sections.toml:1, 10]: [global] must be a TOML table
+#    1 | global = 1
+#      |          ^
+# [non-table-sections.toml:2, 8]: [meta] must be a TOML table
+#    2 | meta = false
+#      |        ^^^^^
+# [non-table-sections.toml:3, 7]: [src] must be a TOML table
+#    3 | src = []
+#      |       ^^
+# [non-table-sections.toml:4, 8]: [base] must be a TOML table
+#    4 | base = "invalid"
+#      |        ^^^^^^^^^

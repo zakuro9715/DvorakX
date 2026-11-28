@@ -1,0 +1,7 @@
+[global]
+remaps = { "1" = 2 }
+
+# Output:
+# [sample.toml:2, 18]: invalid remap destination: expected string, got number
+#    2 | remaps = { "1" = 2 }
+#      |                  ^

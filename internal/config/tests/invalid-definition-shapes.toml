@@ -1,0 +1,27 @@
+[meta]
+default = '&base'
+[src]
+def = 'a b'
+[base]
+def = '#src'
+[empty-array]
+def = []
+[empty-string]
+def = ' '
+[scalar]
+def = true
+[mixed]
+def = ['a', 2]
+# Output:
+# [invalid-definition-shapes.toml:8, 7]: empty-array.def must contain at least one key
+#    8 | def = []
+#      |       ^^
+# [invalid-definition-shapes.toml:10, 7]: empty-string.def must contain at least one key
+#   10 | def = ' '
+#      |       ^^^
+# [invalid-definition-shapes.toml:12, 7]: scalar.def must be a string or string array
+#   12 | def = true
+#      |       ^^^^
+# [invalid-definition-shapes.toml:14, 13]: mixed.def[1] must be a string
+#   14 | def = ['a', 2]
+#      |             ^

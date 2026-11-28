@@ -1,0 +1,10 @@
+[meta]
+default = '&base'
+[src]
+def = 'a b'
+[base]
+def = 'a @missing'
+# Output:
+# [undefined-definition-action.toml:6, 10]: undefined action "missing"
+#    6 | def = 'a @missing'
+#      |          ^^^^^^^^

@@ -1,0 +1,15 @@
+[meta]
+default = '&base'
+[src]
+def = 'a b'
+[base]
+def = '#src'
+[inactive]
+def = ['unknown']
+# Output:
+# [invalid-inactive-layer.toml:8, 7]: source and layer definitions have different lengths: 2 and 1
+#    8 | def = ['unknown']
+#      |       ^^^^^^^^^^^
+# [invalid-inactive-layer.toml:8, 8]: unsupported layer key "unknown"
+#    8 | def = ['unknown']
+#      |        ^^^^^^^^^

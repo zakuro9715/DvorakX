@@ -1,0 +1,38 @@
+[global.actions]
+not-a-table = []
+empty = {}
+multiple = {noop = [], send-keys = 'a'}
+unsupported = {unknown = []}
+noop-args = {noop = ['a']}
+send-type = {send-keys = true}
+send-empty = {send-keys = []}
+send-mixed = {send-keys = ['ctrl', 1]}
+send-unknown = {send-keys = ['unknown']}
+# Output:
+# [invalid-actions.toml:2, 15]: action "not-a-table" must contain exactly one action
+#    2 | not-a-table = []
+#      |               ^^
+# [invalid-actions.toml:3, 9]: action "empty" must contain exactly one action
+#    3 | empty = {}
+#      |         ^^
+# [invalid-actions.toml:4, 12]: action "multiple" must contain exactly one action
+#    4 | multiple = {noop = [], send-keys = 'a'}
+#      |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+# [invalid-actions.toml:5, 16]: unsupported action in "unsupported"
+#    5 | unsupported = {unknown = []}
+#      |                ^^^^^^^
+# [invalid-actions.toml:6, 21]: noop action does not accept arguments
+#    6 | noop-args = {noop = ['a']}
+#      |                     ^^^^^
+# [invalid-actions.toml:7, 26]: send-keys must be a string or string array
+#    7 | send-type = {send-keys = true}
+#      |                          ^^^^
+# [invalid-actions.toml:8, 27]: send-keys must contain at least one key
+#    8 | send-empty = {send-keys = []}
+#      |                           ^^
+# [invalid-actions.toml:9, 36]: send-keys argument at position 1 must be a string
+#    9 | send-mixed = {send-keys = ['ctrl', 1]}
+#      |                                    ^
+# [invalid-actions.toml:10, 30]: unsupported send-keys key "unknown"
+#   10 | send-unknown = {send-keys = ['unknown']}
+#      |                              ^^^^^^^^^

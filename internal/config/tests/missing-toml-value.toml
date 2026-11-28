@@ -1,0 +1,6 @@
+[global.remaps]
+a =
+# Output:
+# [missing-toml-value.toml:2, 4]: unexpected character U+000A at start of value
+#    2 | a =
+#      |    ^

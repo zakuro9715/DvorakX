@@ -1,0 +1,6 @@
+[global]
+actions = []
+# Output:
+# [invalid-action-table.toml:2, 11]: global.actions must be a TOML table
+#    2 | actions = []
+#      |           ^^
