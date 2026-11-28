@@ -10,10 +10,10 @@ import (
 	"github.com/zakuro9715/DvorakZ/internal/linux"
 )
 
-func run(mappings *keyboard.Mappings, stop <-chan struct{}, debug bool) error {
+func run(mappings *keyboard.Mappings, stop <-chan struct{}, newObserver func() *keyboard.InputObserver, debug bool) error {
 	var output io.Writer
 	if debug {
 		output = os.Stderr
 	}
-	return linux.Run(mappings, stop, output)
+	return linux.Run(mappings, stop, newObserver, output)
 }

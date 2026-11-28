@@ -4,6 +4,8 @@ package linux
 
 import (
 	"testing"
+	"testing/synctest"
+	"time"
 
 	"github.com/stretchr/testify/require"
 	"golang.org/x/sys/unix"
@@ -89,7 +91,7 @@ func TestDisconnectAndReconnect(t *testing.T) {
 		r := newRemapper(mappings, func(code uint16, value int32) error {
 			return writeKey(output[1], code, value)
 		})
-		devices[path] = &device{input: input[0], output: output[1], remap: r, grabbed: true}
+		devices[path] = &device{input: input[0], output: output[1], remap: r, grabbed: true, observer: keyboard.NewInputObserver(func() {})}
 		// Unplug while a key is held and verify its release is emitted.
 		require.NoError(t, r.handle(keys.A, 1, false))
 		require.NoError(t, unix.Close(input[1]))
@@ -102,4 +104,43 @@ func TestDisconnectAndReconnect(t *testing.T) {
 		require.Zero(t, events[2*eventSize+20])
 		require.NoError(t, unix.Close(output[0]))
 	}
+}
+
+func TestEmergencyEscape(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		esc, a, b := keys.Key{ScanCode: keys.Escape}, keys.Key{ScanCode: keys.A}, keys.Key{ScanCode: keys.B}
+		mappings := keyboard.NewMappings(map[keys.Key]keys.Key{esc: a, b: esc})
+		stops := 0
+		var events []keyEvent
+		newDevice := func() *device {
+			return &device{
+				observer: keyboard.NewInputObserver(func() { stops++ }),
+				remap: newRemapper(mappings, func(code uint16, value int32) error {
+					events = append(events, keyEvent{code, value})
+					return nil
+				}),
+			}
+		}
+		first, second := newDevice(), newDevice()
+		// A remapped Esc output does not arm the deadline.
+		require.NoError(t, first.process(evKey, keys.B, 1))
+		time.Sleep(3 * time.Second)
+		synctest.Wait()
+		require.Zero(t, stops)
+		require.NoError(t, first.process(evKey, keys.B, 0))
+		// Event loss cancels a physical Esc hold and discards subsequent events.
+		require.NoError(t, second.process(evKey, keys.Escape, 1))
+		require.NoError(t, second.process(evSyn, synDropped, 0))
+		time.Sleep(3 * time.Second)
+		synctest.Wait()
+		require.Zero(t, stops)
+		// The physical Esc still maps to A and arms the deadline on its own device.
+		require.NoError(t, first.process(evKey, keys.Escape, 1))
+		require.NoError(t, newDevice().process(evKey, keys.Escape, 0))
+		time.Sleep(3 * time.Second)
+		synctest.Wait()
+		require.Equal(t, 1, stops)
+		require.Equal(t, []keyEvent{{keys.Escape, 1}, {keys.Escape, 0}, {keys.A, 1}, {keys.A, 1}}, events)
+		first.observer.Reset()
+	})
 }

@@ -9,10 +9,10 @@ import (
 	"github.com/zakuro9715/DvorakZ/internal/windows"
 )
 
-func run(mappings *keyboard.Mappings, stop <-chan struct{}, debug bool) error {
+func run(mappings *keyboard.Mappings, stop <-chan struct{}, newObserver func() *keyboard.InputObserver, debug bool) error {
 	var debugOutput *os.File
 	if debug {
 		debugOutput = os.Stderr
 	}
-	return windows.Run(mappings, stop, debugOutput)
+	return windows.Run(mappings, stop, newObserver, debugOutput)
 }
