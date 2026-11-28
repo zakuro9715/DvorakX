@@ -44,3 +44,15 @@ available. Load the module with `sudo modprobe uinput` if needed. The test user
 needs write access to `/dev/uinput` (or `/dev/input/uinput`) and read access to
 the evdev nodes for `DvorakZ E2E source` and `DvorakZ virtual keyboard`.
 DvorakZ can grab other keyboards it has permission to read during the test.
+
+### macOS
+
+Run in an isolated graphical login session on a Mac or macOS VM with the Xcode
+Command Line Tools. Grant Input Monitoring and Accessibility under System
+Settings → Privacy & Security to the terminal or binaries identified by macOS.
+Restart the affected processes after granting access. The test sends keys into
+the login session, so keep other keyboard activity out of that session.
+
+```sh
+CGO_ENABLED=1 go test -tags=e2e ./e2e/macos/...
+```
