@@ -4,7 +4,7 @@ A keyboard remaper, not only dvorak.
 
 Spiritual Successor of [DvorakJ](https://web.archive.org/web/20230609021050/https://blechmusik.xii.jp/dvorakj/)
 
-Supports windows only for now. Linux and MacOS support is planned.
+Supports windows. Linux and MacOS are experimental.
 
 ## Usage
 
